@@ -1,0 +1,266 @@
+# DaVinci Resolve 3D Caption Glider
+
+A beautiful 3D animated caption system for DaVinci Resolve that automatically syncs with your audio transcription. Words glide smoothly across the screen with pop-in animations, perfectly timed to your voiceover.
+
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![Python](https://img.shields.io/badge/python-3.8+-green.svg)
+![DaVinci Resolve](https://img.shields.io/badge/DaVinci%20Resolve-18%2B-red.svg)
+
+## ✨ Features
+
+- 🎬 **Auto-sync with DaVinci Resolve** - Reads transcription directly from your timeline
+- 🎯 **Word-level timing** - Each word appears exactly when spoken
+- 🎨 **3D animated text** - Smooth camera glide with pop-in reveal animations
+- ⚡ **Real-time preview** - See your captions before adding to timeline
+- 🔄 **One-click export** - Send captions back to Resolve as subtitle track
+- 🎭 **Customizable styling** - Adjust colors, timing, animation curves, and more
+
+## 🎥 Demo
+
+[Add demo GIF/video here]
+
+## 📋 Prerequisites
+
+- **DaVinci Resolve 18+** (Studio or Free)
+- **Python 3.8+**
+- Modern web browser (Chrome, Firefox, Safari, Edge)
+
+## 🚀 Quick Start
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/Cdaprod/DaVinci-Resolve-3D-Caption-Glider.git
+cd DaVinci-Resolve-3D-Caption-Glider
+```
+
+### 2. Install Dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### 3. Set Up DaVinci Resolve Python Path
+
+**macOS:**
+
+```bash
+export PYTHONPATH="/Applications/DaVinci Resolve/DaVinci Resolve.app/Contents/Libraries/Fusion/:$PYTHONPATH"
+```
+
+**Windows:**
+
+```cmd
+set PYTHONPATH=C:\Program Files\Blackmagic Design\DaVinci Resolve\fusionscript;%PYTHONPATH%
+```
+
+**Linux:**
+
+```bash
+export PYTHONPATH="/opt/resolve/libs/Fusion/:$PYTHONPATH"
+```
+
+### 4. Transcribe Your Audio in Resolve
+
+1. Open your project in DaVinci Resolve
+1. Select the audio/video clip on your timeline
+1. Right-click → **Transcribe Audio**
+1. Choose your language → Click **OK**
+1. Wait for transcription to complete
+
+### 5. Run the Server
+
+```bash
+python main.py
+```
+
+### 6. Open in Browser
+
+Navigate to `http://localhost:8080` in your web browser.
+
+## 🎮 Usage
+
+### Basic Workflow
+
+1. **Load Transcription**
+
+- Click “Load from Resolve” button
+- Captions auto-sync with your voiceover timing
+- Preview the 3D animation in real-time
+
+1. **Customize (Optional)**
+
+- Edit `cfg` object in HTML for styling
+- Adjust animation speed, colors, reveal timing
+
+1. **Export to Timeline**
+
+- Click “Create Captions” to add subtitles to Resolve
+- Captions appear as a new subtitle track
+- Perfectly synced with word-level timing
+
+### Alternative: Manual Text Input
+
+If you don’t have audio transcription, create a `public/lines.txt` file:
+
+```txt
+This is my first caption line
+Here's the second one
+And a third line appears
+```
+
+The system will fall back to this file automatically.
+
+## ⚙️ Configuration
+
+Edit the `cfg` object in `public/index.html` to customize:
+
+```javascript
+const cfg = {
+  // Text appearance
+  textSize: 0.15,        // Size of 3D text
+  textDepth: 0.03,       // Depth extrusion
+  color: 0x00ccff,       // Text color (hex)
+  
+  // Animation timing
+  wordsPerSecond: 3.0,   // Speed of glide
+  followLambda: 34,      // Camera follow smoothness
+  revealWordLead: 0.70,  // How early words appear
+  
+  // Reveal animation
+  revealMs: 240,         // Fade-in duration
+  revealPopScale: 1.28,  // Pop scale multiplier
+  revealRise: 0.06,      // Upward rise amount
+  
+  // Spacing
+  spaceMultiplier: 1.55, // Space between words
+  lineGap: 0.50,         // Gap between lines
+  
+  // Camera
+  cameraDistance: 2.8,   // Distance from text
+};
+```
+
+## 📁 Project Structure
+
+```
+resolve-3d-caption-glider/
+├── main.py                 # Flask server + Resolve API bridge
+├── requirements.txt        # Python dependencies
+├── README.md              # This file
+├── LICENSE                # MIT License
+└── public/
+    ├── index.html         # 3D caption renderer (Three.js)
+    └── lines.txt          # Optional: Manual caption lines
+```
+
+## 🔌 API Endpoints
+
+|Endpoint                       |Method|Description                           |
+|-------------------------------|------|--------------------------------------|
+|`/api/get-transcription`       |GET   |Fetch transcription from selected clip|
+|`/api/create-animated-captions`|POST  |Create synced captions on timeline    |
+|`/api/timeline-info`           |GET   |Get current timeline metadata         |
+|`/api/export-srt`              |POST  |Export captions as SRT file           |
+
+## 🎨 Customization Examples
+
+### Change Text Color to Yellow
+
+```javascript
+color: 0xffff00,
+```
+
+### Faster Animation
+
+```javascript
+wordsPerSecond: 5.0,
+followLambda: 50,
+```
+
+### Subtle Pop Effect
+
+```javascript
+revealPopScale: 1.10,
+revealOvershoot: 0.15,
+```
+
+### Bigger Text
+
+```javascript
+textSize: 0.25,
+textDepth: 0.05,
+```
+
+## 🐛 Troubleshooting
+
+### “Could not connect to DaVinci Resolve”
+
+- Ensure DaVinci Resolve is **running**
+- Check that a **project is open**
+- Verify a **timeline is active**
+- Restart both Resolve and the server
+
+### “No transcription found”
+
+- Select a clip with audio on the timeline
+- Right-click → **Transcribe Audio** first
+- Wait for transcription to complete (check progress in Resolve)
+
+### Python Module Not Found
+
+```bash
+# Verify PYTHONPATH is set correctly
+echo $PYTHONPATH  # macOS/Linux
+echo %PYTHONPATH% # Windows
+
+# Should include Resolve's Fusion directory
+```
+
+### Port 8080 Already in Use
+
+Edit `main.py` and change the port:
+
+```python
+app.run(host='0.0.0.0', port=3000, debug=True)  # Use different port
+```
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+1. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+1. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+1. Push to the branch (`git push origin feature/AmazingFeature`)
+1. Open a Pull Request
+
+## 📝 License
+
+This project is licensed under the MIT License - see the <LICENSE> file for details.
+
+## 🙏 Acknowledgments
+
+- Built with [Three.js](https://threejs.org/) for 3D rendering
+- [Flask](https://flask.palletsprojects.com/) for Python web framework
+- DaVinci Resolve API by Blackmagic Design
+
+## 📧 Support
+
+- 🐛 [Report bugs](https://github.com/Cdaprod/DaVinci-Resolve-3D-Caption-Glider/issues)
+- 💡 [Request features](https://github.com/Cdaprod/DaVinci-Resolve-3D-Caption-Glider/issues)
+- ⭐ Star this repo if you find it useful!
+
+## 🔮 Roadmap
+
+- [ ] Per-word color highlighting
+- [ ] Export to Fusion compositions
+- [ ] Multiple font support
+- [ ] Preset animation styles
+- [ ] Batch processing multiple clips
+- [ ] Real-time preview sync with Resolve playback
+- [ ] Custom easing curves editor
+
+-----
+
+Made with ❤️ for video editors

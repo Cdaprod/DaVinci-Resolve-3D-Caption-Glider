@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no" />
+  <title>3D Glide-Over-Line Captioner (Resolve Transcript Sync)</title>
+  <style>
+    html, body { margin:0; padding:0; width:100%; height:100%; background:#000; overflow:hidden; }
+    canvas { width:100%; height:100%; display:block; }
+
+    /* UI overlay */
+    #ui {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      z-index: 9999;
+      background: rgba(0,0,0,0.78);
+      border: 1px solid rgba(255,255,255,0.12);
+      padding: 12px;
+      border-radius: 12px;
+      color: #fff;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      font-size: 12px;
+      width: 260px;
+      user-select: none;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.45);
+      backdrop-filter: blur(6px);
+    }
+    #ui button {
+      width: 100%;
+      padding: 10px 10px;
+      margin: 6px 0;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-weight: 800;
+      letter-spacing: 0.2px;
+    }
+    #btnLoad { background: #00ccff; color:#001018; }
+    #btnCreate { background: #4caf50; color:#fff; }
+    #btnReplay { background: #303030; color:#fff; }
+    #btnRecord { background: #ff3b30; color:#fff; }
+    #btnStop { background: #ff9500; color:#111; display:none; }
+
+    #ui label { display:block; margin-top:10px; opacity:0.92; }
+    #ui input[type="range"] { width: 100%; margin-top: 6px; }
+    #ui .row { display:flex; gap:8px; }
+    #ui .row button { width: 50%; }
+    #status {
+      margin-top: 8px;
+      line-height: 1.35;
+      opacity: 0.92;
+      white-space: pre-wrap;
+    }
+    #hint { opacity:0.7; margin-top:6px; }
+    #mini {
+      margin-top: 8px;
+      opacity: 0.75;
+      font-size: 11px;
+      line-height: 1.25;
+    }
+    #mini code { opacity: 0.9; }
+  </style>
+</head>
+<body>
+<canvas id="c"></canvas>
+
+<div id="ui">
+  <div style="font-weight:900; font-size:13px;">Resolve Transcript Sync</div>
+
+  <button id="btnLoad">Load from Resolve</button>
+  <button id="btnReplay">Replay</button>
+  <button id="btnCreate">Create Captions in Resolve</button>
+
+  <div class="row">
+    <button id="btnRecord">Record (WebM)</button>
+    <button id="btnStop">Stop</button>
+  </div>
+
+  <label>
+    Words per line: <span id="wplVal">8</span>
+    <input id="wpl" type="range" min="3" max="14" step="1" value="8" />
+  </label>
+
+  <label>
+    End overhang: <span id="ohVal">0.50</span> (× last-word width)
+    <input id="oh" type="range" min="0" max="1" step="0.05" value="0.50" />
+  </label>
+
+  <div id="status">Idle.</div>
+  <div id="hint">Tip: In Resolve, select a clip → right-click → Transcribe Audio.</div>
+  <div id="mini">
+    Export note: recording uses <code>canvas.captureStream</code> + <code>MediaRecorder</code>.
+    Some iOS browsers may block WebM recording.
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/FontLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/geometries/TextGeometry.js"></script>
+
+<script>
+  // -------------------------
+  // CONFIG
+  // -------------------------
+  const cfg = {
+    // Fallback if Resolve isn't available
+    linesUrl: './demo-lines.txt',
+
+    textSize:  0.10,
+    textDepth: 0.03,
+
+    color:     0x00ccff,
+    cameraDistance: 3.5,
+
+    // GLIDE (fallback speed mode only)
+    wordsPerSecond:  2.5,
+    curveLookAheadU: 0.045,
+    followLambda:    34,
+    revealWordLead:  1.0,
+
+    // SPACING
+    spaceMultiplier: 1.55,
+
+    // WORD REVEAL ANIMATION
+    revealMs:         200,
+    revealPopScale:   1.28,
+    revealRise:       0.06,
+    revealZ:          0.10,
+    revealOvershoot:  0.10,
+
+    // END COMPOSITION
+    endOverhangFactor: 0.50,   // <-- user-adjustable via slider
+    endOverhangBlendU: 0.10,   // blend-in during last 10% of line (prevents snap)
+    endEaseOutU:       0.12,   // slow down during last 12% for readability
+
+    // LINE FLOW
+    keepPreviousLinesVisible: false,
+    lineHoldMsAfterComplete:  350
+  };
+
+  // -------------------------
+  // THREE SETUP
+  // -------------------------
+  const canvas   = document.getElementById('c');
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias:true, alpha:false });
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setSize(window.innerWidth, window.innerHeight);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x000000);
+
+  const camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.05, 200);
+  scene.add(camera);
+
+  const baseMat = new THREE.MeshBasicMaterial({
+    color: cfg.color,
+    transparent: true,
+    opacity: 1
+  });
+
+  // line object shape:
+  // { group, meshes[], centers[], widths[], words?, startTime?, endTime? }
+  let lineObjs = [];
+  let transcriptionData = null;
+  let fontRef = null;
+
+  // -------------------------
+  // UI
+  // -------------------------
+  const statusEl = document.getElementById('status');
+  const wplEl = document.getElementById('wpl');
+  const wplValEl = document.getElementById('wplVal');
+  const ohEl = document.getElementById('oh');
+  const ohValEl = document.getElementById('ohVal');
+
+  const btnLoad = document.getElementById('btnLoad');
+  const btnReplay = document.getElementById('btnReplay');
+  const btnCreate = document.getElementById('btnCreate');
+  const btnRecord = document.getElementById('btnRecord');
+  const btnStop = document.getElementById('btnStop');
+
+  function setStatus(msg) { statusEl.textContent = msg; }
+
+  wplEl.addEventListener('input', () => { wplValEl.textContent = String(wplEl.value); });
+  ohEl.addEventListener('input', () => {
+    const v = Number(ohEl.value);
+    cfg.endOverhangFactor = v;
+    ohValEl.textContent = v.toFixed(2);
+  });
+
+  // -------------------------
+  // HELPERS
+  // -------------------------
+  function clamp01(x){ return Math.max(0, Math.min(1, x)); }
+
+  function smooth01(t){
+    t = clamp01(t);
+    return t * t * (3 - 2 * t);
+  }
+
+  function lerp(a,b,t){ return a + (b - a) * t; }
+
+  function easeOutCubic(t){
+    t = clamp01(t);
+    return 1 - Math.pow(1 - t, 3);
+  }
+
+  function easeOutBack(t, overshoot = 0.30){
+    t = clamp01(t);
+    const c1 = 1.70158 + overshoot * 2.0;
+    const c3 = c1 + 1;
+    return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+  }
+
+  function damp(current, target, lambda, dt) {
+    return current + (target - current) * (1 - Math.exp(-lambda * dt));
+  }
+
+  function render() { renderer.render(scene, camera); }
+
+  async function loadLines(url) {
+    const res = await fetch(url, { cache: 'no-store' });
+    if(!res.ok) throw new Error(`Failed to load lines: ${res.status} ${res.statusText}`);
+    const txt = await res.text();
+    return txt.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  }
+
+  async function loadTranscriptionFromResolve() {
+    try {
+      const res = await fetch('/api/get-transcription', { cache: 'no-store' });
+      const data = await res.json();
+      if (data && data.error) return { error: data.error, instructions: data.instructions };
+      return data;
+    } catch (e) {
+      return { error: String(e) };
+    }
+  }
+
+  function getSpaceAdvance(font) {
+    const glyph = font?.data?.glyphs?.[' '] ?? null;
+    const ha = (glyph && typeof glyph.ha === 'number') ? glyph.ha : 20;
+    const scale = cfg.textSize / (font.data?.resolution || 1000);
+    return ha * scale;
+  }
+
+  function buildLine(font, lineText) {
+    const words = lineText.split(/\s+/);
+    const group = new THREE.Group();
+    const yPos = 0;
+
+    const spaceW = getSpaceAdvance(font) * cfg.spaceMultiplier;
+
+    const wordData = words.map(w => {
+      const geom = new THREE.TextGeometry(w, {
+        font,
+        size: cfg.textSize,
+        height: cfg.textDepth,
+        curveSegments: 2
+      });
+      geom.computeBoundingBox();
+      const bb = geom.boundingBox;
+
+      const width = bb.max.x - bb.min.x;
+      geom.translate(-bb.min.x, 0, 0); // normalize X only
+
+      return { geom, width };
+    });
+
+    const totalW =
+      wordData.reduce((s,d)=>s+d.width,0) +
+      (words.length - 1) * spaceW;
+
+    let cursorX = -totalW / 2;
+
+    const meshes  = [];
+    const centers = [];
+    const widths  = [];
+
+    for (let i = 0; i < wordData.length; i++) {
+      const d = wordData[i];
+
+      const mat = baseMat.clone();
+      mat.opacity = 0;
+
+      const mesh = new THREE.Mesh(d.geom, mat);
+      mesh.position.set(cursorX, yPos, 0);
+      mesh.visible = false;
+
+      // reveal state
+      mesh.userData.revealStart = null;
+      mesh.userData.revealed = false;
+      mesh.userData.basePos = mesh.position.clone();
+
+      group.add(mesh);
+      meshes.push(mesh);
+
+      const cx = cursorX + d.width / 2;
+      centers.push(new THREE.Vector3(cx, yPos, 0));
+      widths.push(d.width);
+
+      cursorX += d.width + spaceW;
+    }
+
+    return { group, meshes, centers, widths };
+  }
+
+  // Convert Resolve words[] -> timed lines[] (each line keeps exact word timing)
+  function transcriptionToTimedLines(transcription, wordsPerLine = 8) {
+    const words = Array.isArray(transcription?.words) ? transcription.words : [];
+    const lines = [];
+
+    for (let i = 0; i < words.length; i += wordsPerLine) {
+      const chunk = words.slice(i, i + wordsPerLine);
+      if (!chunk.length) continue;
+
+      const text = chunk.map(w => w.text).join(' ');
+      const startTime = Number(chunk[0].startTime ?? 0);
+      const endTime = Number(chunk[chunk.length - 1].endTime ?? startTime);
+
+      lines.push({ text, startTime, endTime, words: chunk });
+    }
+    return lines;
+  }
+
+  // -------------------------
+  // REVEAL ANIMATION
+  // -------------------------
+  function startReveal(mesh, now) {
+    if (mesh.userData.revealed) return;
+
+    mesh.userData.revealed = true;
+    mesh.visible = true;
+    mesh.userData.revealStart = now;
+
+    mesh.material.opacity = 0;
+    mesh.scale.setScalar(cfg.revealPopScale);
+    mesh.position.set(
+      mesh.userData.basePos.x,
+      mesh.userData.basePos.y + cfg.revealRise,
+      mesh.userData.basePos.z + cfg.revealZ
+    );
+  }
+
+  function tickReveal(mesh, now) {
+    if (!mesh.visible) return;
+    const t0 = mesh.userData.revealStart;
+    if (t0 === null) return;
+
+    const t = clamp01((now - t0) / cfg.revealMs);
+
+    const a = easeOutCubic(t);
+    mesh.material.opacity = a;
+
+    const pop = easeOutBack(t, cfg.revealOvershoot);
+    const s = 1 + (cfg.revealPopScale - 1) * (1 - t);
+    const settled = 1 + (s - 1) * (1 / pop);
+    mesh.scale.setScalar(settled);
+
+    const rise = (1 - a) * cfg.revealRise;
+    const zPush = (1 - a) * cfg.revealZ;
+
+    mesh.position.set(
+      mesh.userData.basePos.x,
+      mesh.userData.basePos.y + rise,
+      mesh.userData.basePos.z + zPush
+    );
+
+    if (t >= 1) {
+      mesh.userData.revealStart = null;
+      mesh.material.opacity = 1;
+      mesh.scale.setScalar(1);
+      mesh.position.copy(mesh.userData.basePos);
+    }
+  }
+
+  // -------------------------
+  // CAMERA TARGET: apply "end overhang" with a smooth blend
+  // -------------------------
+  function applyEndOverhang(target, u, centers, widths) {
+    if (!centers?.length || !widths?.length) return target;
+
+    const lastIdx = centers.length - 1;
+    const lastW = Number(widths[lastIdx] ?? 0);
+    if (!isFinite(lastW) || lastW <= 0) return target;
+
+    // blend-in during last cfg.endOverhangBlendU fraction of the line
+    const blendStart = 1 - cfg.endOverhangBlendU;
+    const k = smooth01((u - blendStart) / Math.max(0.0001, cfg.endOverhangBlendU));
+
+    const offset = lastW * cfg.endOverhangFactor * k;
+
+    const out = target.clone();
+    out.x += offset;
+    return out;
+  }
+
+  // Slow down at the end for readability (without changing timings)
+  // We remap u -> u' that eases-out during the last cfg.endEaseOutU.
+  function easeOutEndU(u) {
+    const e = clamp01(cfg.endEaseOutU);
+    if (e <= 0.0001) return u;
+
+    const start = 1 - e;
+    if (u <= start) return u;
+
+    const t = clamp01((u - start) / e);
+    // ease-out: compress motion near the end
+    const eased = easeOutCubic(t);
+    return start + eased * e;
+  }
+
+  // -------------------------
+  // ANIMATION: TIMED (Resolve)
+  // -------------------------
+  function animateLineGlideWithTiming(lineObj, onComplete) {
+    const { meshes, centers, widths, words, startTime, endTime } = lineObj;
+    const n = centers.length;
+
+    // reset states for this line play
+    for (const m of meshes) {
+      m.visible = false;
+      m.material.opacity = 0;
+      m.userData.revealStart = null;
+      m.userData.revealed = false;
+      m.scale.setScalar(1);
+      m.position.copy(m.userData.basePos);
+    }
+
+    if (n === 0) { onComplete?.(); return; }
+
+    const curve = new THREE.CatmullRomCurve3(centers.map(v => v.clone()), false, 'catmullrom', 0.5);
+
+    const ARC_SAMPLES = Math.max(220, n * 90);
+    const lengths = curve.getLengths(ARC_SAMPLES);
+    const totalLen = lengths[lengths.length - 1];
+
+    const durationSec = Math.max(0.05, (endTime - startTime));
+    const totalMs = durationSec * 1000;
+    const start = performance.now();
+
+    let camX = camera.position.x;
+    let camY = camera.position.y;
+
+    const followLambda = cfg.followLambda;
+    const lookAheadU   = cfg.curveLookAheadU;
+
+    let lastNow = performance.now();
+
+    function frame(now) {
+      const dt = Math.max(0.001, (now - lastNow) / 1000);
+      lastNow = now;
+
+      const elapsed = now - start;
+      const uRaw = Math.min(elapsed / totalMs, 1);
+      const u = easeOutEndU(uRaw);
+
+      // arc-length camera
+      const dist = u * totalLen;
+      let idx = 0;
+      while (idx < lengths.length && lengths[idx] < dist) idx++;
+
+      const t = idx / (lengths.length - 1);
+      const t2 = Math.min(1, t + lookAheadU);
+
+      // base target
+      let target = curve.getPointAt(t2);
+
+      // end overhang composition
+      target = applyEndOverhang(target, uRaw, centers, widths);
+
+      // reveal words using transcript word timing
+      if (Array.isArray(words) && words.length === meshes.length) {
+        const currentTime = startTime + (uRaw * durationSec);
+        for (let k = 0; k < words.length; k++) {
+          if (currentTime >= Number(words[k].startTime ?? 0)) startReveal(meshes[k], now);
+        }
+      } else {
+        const p = uRaw * (n - 1);
+        const revealIdx = Math.min(n - 1, Math.floor(p + cfg.revealWordLead));
+        for (let k = 0; k <= revealIdx; k++) startReveal(meshes[k], now);
+      }
+
+      for (const m of meshes) tickReveal(m, now);
+
+      camX = damp(camX, target.x, followLambda, dt);
+      camY = damp(camY, target.y, followLambda, dt);
+
+      camera.position.set(camX, camY, cfg.cameraDistance);
+      camera.lookAt(target);
+
+      renderer.render(scene, camera);
+
+      if (uRaw < 1) {
+        requestAnimationFrame(frame);
+      } else {
+        for (const m of meshes) {
+          m.visible = true;
+          m.material.opacity = 1;
+          m.userData.revealStart = null;
+          m.scale.setScalar(1);
+          m.position.copy(m.userData.basePos);
+        }
+        setTimeout(() => onComplete?.(), cfg.lineHoldMsAfterComplete);
+      }
+    }
+
+    requestAnimationFrame(frame);
+  }
+
+  // -------------------------
+  // ANIMATION: FALLBACK SPEED MODE (demo-lines.txt)
+  // -------------------------
+  function animateLineGlideFallback(lineObj, onComplete){
+    const { meshes, centers, widths } = lineObj;
+    const n = centers.length;
+
+    for (const m of meshes) {
+      m.visible = false;
+      m.material.opacity = 0;
+      m.userData.revealStart = null;
+      m.userData.revealed = false;
+      m.scale.setScalar(1);
+      m.position.copy(m.userData.basePos);
+    }
+
+    if (n === 0) { onComplete?.(); return; }
+
+    const curve = new THREE.CatmullRomCurve3(centers.map(v => v.clone()), false, 'catmullrom', 0.5);
+
+    const ARC_SAMPLES = Math.max(220, n * 90);
+    const lengths = curve.getLengths(ARC_SAMPLES);
+    const totalLen = lengths[lengths.length - 1];
+
+    const totalMs = n * (1000 / cfg.wordsPerSecond);
+    const start = performance.now();
+
+    let camX = camera.position.x;
+    let camY = camera.position.y;
+
+    const revealWordLead = cfg.revealWordLead;
+    const followLambda   = cfg.followLambda;
+    const lookAheadU     = cfg.curveLookAheadU;
+
+    let lastNow = performance.now();
+
+    function frame(now){
+      const dt = Math.max(0.001, (now - lastNow) / 1000);
+      lastNow = now;
+
+      const elapsed = now - start;
+      const uRaw = Math.min(elapsed / totalMs, 1);
+      const u = easeOutEndU(uRaw);
+
+      const dist = u * totalLen;
+      let idx = 0;
+      while (idx < lengths.length && lengths[idx] < dist) idx++;
+
+      const t = idx / (lengths.length - 1);
+      const t2 = Math.min(1, t + lookAheadU);
+
+      let target = curve.getPointAt(t2);
+      target = applyEndOverhang(target, uRaw, centers, widths);
+
+      const p = uRaw * (n - 1);
+      const revealIdx = Math.min(n - 1, Math.floor(p + revealWordLead));
+      for (let k = 0; k <= revealIdx; k++) startReveal(meshes[k], now);
+
+      for (const m of meshes) tickReveal(m, now);
+
+      camX = damp(camX, target.x, followLambda, dt);
+      camY = damp(camY, target.y, followLambda, dt);
+
+      camera.position.set(camX, camY, cfg.cameraDistance);
+      camera.lookAt(target);
+
+      renderer.render(scene, camera);
+
+      if (uRaw < 1){
+        requestAnimationFrame(frame);
+      } else {
+        for (const m of meshes) {
+          m.visible = true;
+          m.material.opacity = 1;
+          m.userData.revealStart = null;
+          m.scale.setScalar(1);
+          m.position.copy(m.userData.basePos);
+        }
+        setTimeout(() => onComplete?.(), cfg.lineHoldMsAfterComplete);
+      }
+    }
+
+    requestAnimationFrame(frame);
+  }
+
+  // -------------------------
+  // SEQUENCER
+  // -------------------------
+  let isPlaying = false;
+
+  function clearAllLinesFromScene() {
+    for (const obj of lineObjs) {
+      if (obj?.group) scene.remove(obj.group);
+    }
+  }
+
+  function runSequence(lineIdx = 0) {
+    if (lineIdx >= lineObjs.length) {
+      isPlaying = false;
+      setStatus(transcriptionData
+        ? `Done. (Resolve) Lines: ${lineObjs.length}  Words: ${transcriptionData.words?.length ?? 0}`
+        : `Done. (demo-lines.txt) Lines: ${lineObjs.length}`
+      );
+      return;
+    }
+
+    const current = lineObjs[lineIdx];
+    scene.add(current.group);
+
+    const hasTiming = (typeof current.startTime === 'number' && typeof current.endTime === 'number');
+
+    const done = () => {
+      if (!cfg.keepPreviousLinesVisible) scene.remove(current.group);
+      runSequence(lineIdx + 1);
+    };
+
+    if (hasTiming) animateLineGlideWithTiming(current, done);
+    else animateLineGlideFallback(current, done);
+  }
+
+  function replay() {
+    if (!fontRef) return;
+    if (isPlaying) return;
+
+    isPlaying = true;
+    clearAllLinesFromScene();
+
+    camera.position.set(0, 0, cfg.cameraDistance);
+    camera.lookAt(new THREE.Vector3(0,0,0));
+    render();
+
+    runSequence(0);
+  }
+
+  // -------------------------
+  // BUILD SCENE FROM SOURCE
+  // -------------------------
+  function buildFromTimedLines(font, timedLines) {
+    clearAllLinesFromScene();
+    lineObjs = [];
+
+    for (const ln of timedLines) {
+      const obj = buildLine(font, ln.text);
+      obj.startTime = ln.startTime;
+      obj.endTime = ln.endTime;
+      obj.words = ln.words;
+      lineObjs.push(obj);
+    }
+  }
+
+  function buildFromPlainLines(font, lines) {
+    clearAllLinesFromScene();
+    lineObjs = [];
+    for (const l of lines) lineObjs.push(buildLine(font, l));
+  }
+
+  // -------------------------
+  // RECORD / EXPORT (browser download)
+  // -------------------------
+  let mediaRecorder = null;
+  let recordedChunks = [];
+  let recordingActive = false;
+  let recordStartMs = 0;
+
+  function pickMimeType() {
+    const candidates = [
+      'video/webm;codecs=vp9',
+      'video/webm;codecs=vp8',
+      'video/webm'
+    ];
+    for (const t of candidates) {
+      if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) return t;
+    }
+    return '';
+  }
+
+  function downloadBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+
+  function startRecording() {
+    if (recordingActive) return;
+
+    if (!canvas.captureStream || !window.MediaRecorder) {
+      setStatus('Recording not supported in this browser.\nTry Chrome/Edge on desktop.\n(iOS Safari often blocks WebM MediaRecorder)');
+      return;
+    }
+
+    const stream = canvas.captureStream(60); // 60fps attempt
+    const mimeType = pickMimeType();
+
+    try {
+      mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+    } catch (e) {
+      setStatus('MediaRecorder init failed:\n' + String(e));
+      return;
+    }
+
+    recordedChunks = [];
+    recordingActive = true;
+    recordStartMs = performance.now();
+
+    mediaRecorder.ondataavailable = (ev) => {
+      if (ev.data && ev.data.size > 0) recordedChunks.push(ev.data);
+    };
+
+    mediaRecorder.onstop = () => {
+      recordingActive = false;
+      btnRecord.style.display = '';
+      btnStop.style.display = 'none';
+
+      const blob = new Blob(recordedChunks, { type: (mediaRecorder && mediaRecorder.mimeType) || 'video/webm' });
+      recordedChunks = [];
+
+      const stamp = new Date().toISOString().replace(/[:.]/g,'-');
+      downloadBlob(blob, `captioner-${stamp}.webm`);
+
+      setStatus('Saved recording to device downloads.\nIf you’re on iOS: you may need "Share → Save Video" depending on browser.');
+    };
+
+    mediaRecorder.start(250); // chunk every 250ms
+    btnRecord.style.display = 'none';
+    btnStop.style.display = '';
+    setStatus(`Recording…\nMime: ${mediaRecorder.mimeType || '(default)'}`);
+  }
+
+  function stopRecording() {
+    if (!mediaRecorder || !recordingActive) return;
+    try { mediaRecorder.stop(); } catch (e) { setStatus('Stop failed:\n' + String(e)); }
+  }
+
+  btnRecord.addEventListener('click', startRecording);
+  btnStop.addEventListener('click', stopRecording);
+
+  // -------------------------
+  // BUTTONS
+  // -------------------------
+  btnLoad.addEventListener('click', async () => {
+    if (!fontRef) { setStatus('Font not loaded yet.'); return; }
+
+    setStatus('Loading transcription from Resolve…');
+    const data = await loadTranscriptionFromResolve();
+
+    if (data?.error) {
+      setStatus(`Resolve error:\n${data.error}\n${data.instructions ? '\n' + data.instructions : ''}`);
+      return;
+    }
+
+    transcriptionData = data;
+    const wpl = Number(wplEl.value);
+
+    const timedLines = transcriptionToTimedLines(data, wpl);
+
+    if (!timedLines.length) {
+      setStatus('Loaded transcription, but got 0 lines.\nAre subtitle items / word timings available?');
+      return;
+    }
+
+    buildFromTimedLines(fontRef, timedLines);
+    setStatus(`✓ Loaded Resolve transcript\nClip: ${data.clipName ?? '(unknown)'}\nWords: ${data.words?.length ?? 0}\nLines: ${timedLines.length}`);
+    replay();
+  });
+
+  btnReplay.addEventListener('click', () => {
+    setStatus('Replaying…');
+    replay();
+  });
+
+  btnCreate.addEventListener('click', async () => {
+    if (!transcriptionData?.words?.length) {
+      setStatus('Load from Resolve first.');
+      return;
+    }
+
+    const wpl = Number(wplEl.value);
+    setStatus('Creating captions in Resolve…');
+
+    try {
+      const res = await fetch('/api/create-animated-captions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ words: transcriptionData.words, wordsPerLine: wpl })
+      });
+
+      const out = await res.json();
+      if (out?.error) { setStatus(`Create captions error:\n${out.error}`); return; }
+
+      setStatus(`✓ Created captions in Resolve: ${out.created ?? 0}`);
+    } catch (e) {
+      setStatus(`Create captions failed:\n${String(e)}`);
+    }
+  });
+
+  // -------------------------
+  // BOOT
+  // -------------------------
+  new THREE.FontLoader().load(
+    'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/fonts/helvetiker_regular.typeface.json',
+    async (font) => {
+      fontRef = font;
+
+      // try Resolve first (silent)
+      const data = await loadTranscriptionFromResolve();
+      if (data && !data.error && Array.isArray(data.words) && data.words.length) {
+        transcriptionData = data;
+        const wpl = Number(wplEl.value);
+        const timedLines = transcriptionToTimedLines(data, wpl);
+        if (timedLines.length) {
+          buildFromTimedLines(font, timedLines);
+          setStatus(`Auto-loaded Resolve transcript\nWords: ${data.words.length}\nLines: ${timedLines.length}`);
+          replay();
+          return;
+        }
+      }
+
+      // fallback to demo-lines.txt
+      try {
+        const lines = await loadLines(cfg.linesUrl);
+        buildFromPlainLines(font, lines);
+
+        camera.position.set(0, 0, cfg.cameraDistance);
+        camera.lookAt(new THREE.Vector3(0,0,0));
+        render();
+
+        setStatus(`Loaded fallback demo-lines.txt\nLines: ${lines.length}`);
+        replay();
+      } catch (e) {
+        setStatus(`Boot error:\n${String(e)}`);
+      }
+    },
+    undefined,
+    (err) => setStatus('Font load failed: ' + String(err))
+  );
+
+  // -------------------------
+  // RESIZE
+  // -------------------------
+  window.addEventListener('resize', () => {
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    render();
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,55 @@
+Infrastructure is a narrative.
+This repo tells it in code.
+
+Idempotent builds.
+Deterministic outputs.
+Auditable artifacts.
+
+Logs are not noise.
+They’re provenance.
+
+Networks are not wiring.
+They’re policy.
+
+Containers are not apps.
+They’re contracts.
+
+Version everything.
+Even your assumptions.
+
+Welcome to the repo.
+This isn’t a slideshow -- it’s a build log.
+Every commit is a camera move.
+Every line is a decision.
+
+I don’t "store files".
+I build systems that remember.
+Objects become evidence.
+Metadata becomes truth.
+
+MinIO for the lake.
+Weaviate for recall.
+LangGraph for orchestration.
+Everything containerized.
+Everything reproducible.
+
+The pipeline is simple:
+ingest → enrich → index → search → ship.
+No magic.
+Just engineering.
+
+This is my edge stack.
+Raspberry Pi as the capture node.
+Desktop as the render node.
+Phone as the remote control.
+
+The demo you’re watching?
+Generated from the same code.
+Words are geometry.
+Timing is data.
+Motion is a function.
+
+If you can read it --
+you can run it.
+If you can run it --
+you can fork it.

@@ -21,6 +21,10 @@
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       font-size: 12px;
       width: 290px;
+      max-height: calc(100vh - 20px);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
       user-select: none;
       box-shadow: 0 10px 40px rgba(0,0,0,0.45);
       backdrop-filter: blur(6px);
@@ -66,9 +70,7 @@
     }
 
     /* when collapsed, hide all content except header (and make header look like a tab) */
-    #ui.collapsed #uiBody {
-      display: none;
-    }
+    #ui.collapsed #uiBody { display: none; }
     #ui.collapsed {
       padding: 10px 8px;
       width: 290px; /* keep same width for consistent slide */
@@ -113,6 +115,16 @@
     #hint { opacity:0.7; margin-top:6px; }
     #mini { margin-top: 8px; opacity: 0.75; font-size: 11px; line-height: 1.25; }
     #mini code { opacity: 0.9; }
+
+    #uiBody {
+      flex: 1;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+
+    #uiBody::-webkit-scrollbar { width: 8px; }
+    #uiBody::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); border-radius: 999px; }
+    #uiBody::-webkit-scrollbar-track { background: transparent; }
 
     /* Config panel */
     details.cfgbox {
@@ -224,8 +236,8 @@
     </label>
 
     <label>
-      End overhang: <span id="ohVal">0.50</span> (× last-word width)
-      <input id="oh" type="range" min="0" max="1" step="0.05" value="0.50" />
+      End overhang: <span id="ohVal">0.65</span> (× last-word width)
+      <input id="oh" type="range" min="0" max="1" step="0.05" value="0.65" />
     </label>
 
     <label style="display:flex; align-items:center; gap:10px;">
@@ -268,30 +280,33 @@
     linesUrl: './demo-lines.txt',
 
     textSize:  0.10,
-    textDepth: 0.03,
+    textDepth: 0.001,
 
-    color:     0x00ccff,
+    color:     0xffffff,
     cameraDistance: 3.5,
 
     wordsPerSecond:  2.5,
     curveLookAheadU: 0.055,
-    followLambda:    22,
+    followLambda:    19,
+    lookAtLambda:    12,
     revealWordLead:  1.15,
 
     spaceMultiplier: 1.55,
 
     revealMs:         220,
-    revealPopScale:   1.28,
-    revealRise:       0.06,
-    revealZ:          0.10,
-    revealOvershoot:  0.10,
+    revealPopScale:   1.22,
+    revealRise:       0.05,
+    revealZ:          0.06,
+    revealOvershoot:  0.08,
 
-    endOverhangFactor: 0.50,
+    endOverhangFactor: 0.65,
+    endOverhangPx:     0.16,
+    trackLeadPx:       0.08,
     endOverhangBlendU: 0.10,
-    endEaseOutU:       0.12,
+    endEaseOutU:       0.14,
 
     keepPreviousLinesVisible: false,
-    lineHoldMsAfterComplete:  600,
+    lineHoldMsAfterComplete:  620,
 
     stackLines: true,
     stackLineGap: 0.22,
@@ -315,11 +330,27 @@
   const camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.05, 200);
   scene.add(camera);
 
-  let baseMat = new THREE.MeshBasicMaterial({
-    color: cfg.color,
-    transparent: true,
-    opacity: 1
-  });
+  const ambient = new THREE.AmbientLight(0xffffff, 0.35);
+  const rimLight = new THREE.DirectionalLight(0x6ec8ff, 0.55);
+  rimLight.position.set(0.7, 1.1, 1.8);
+  const fillLight = new THREE.PointLight(0xffffff, 0.28);
+  fillLight.position.set(-1.4, -0.6, 1.2);
+  scene.add(ambient);
+  camera.add(rimLight);
+  camera.add(fillLight);
+
+  function createBaseMaterial() {
+    return new THREE.MeshPhongMaterial({
+      color: cfg.color,
+      emissive: new THREE.Color(cfg.color).multiplyScalar(0.18),
+      specular: new THREE.Color(0xffffff),
+      shininess: 85,
+      transparent: true,
+      opacity: 1
+    });
+  }
+
+  let baseMat = createBaseMaterial();
 
   let lineObjs = [];
   let transcriptionData = null;
@@ -375,6 +406,9 @@
   }
 
   wplEl.addEventListener('input', () => { wplValEl.textContent = String(wplEl.value); });
+
+  ohEl.value = String(cfg.endOverhangFactor);
+  ohValEl.textContent = Number(cfg.endOverhangFactor).toFixed(2);
 
   ohEl.addEventListener('input', () => {
     const v = Number(ohEl.value);
@@ -556,18 +590,33 @@
   // -------------------------
   // Camera target shaping
   // -------------------------
-  function applyEndOverhang(target, u, centers, widths) {
-    if (!centers?.length || !widths?.length) return target;
-    const lastIdx = centers.length - 1;
-    const lastW = Number(widths[lastIdx] ?? 0);
-    if (!isFinite(lastW) || lastW <= 0) return target;
+  function computeCenterBounds(centers) {
+    let minX = Infinity;
+    let maxX = -Infinity;
+    for (const c of centers) {
+      if (!c) continue;
+      if (c.x < minX) minX = c.x;
+      if (c.x > maxX) maxX = c.x;
+    }
+    return { minX, maxX };
+  }
 
-    const blendStart = 1 - cfg.endOverhangBlendU;
-    const k = smooth01((u - blendStart) / Math.max(0.0001, cfg.endOverhangBlendU));
-    const offset = lastW * cfg.endOverhangFactor * k;
+  function endBias(u, maxBias) {
+    const t = clamp01((u - 0.70) / 0.30);
+    return easeOutCubic(t) * maxBias;
+  }
+
+  function shapeTargetWithBounds(target, u, centers, widths, bounds) {
+    if (!centers?.length) return target;
+    const { minX, maxX } = bounds ?? computeCenterBounds(centers);
+    if (!isFinite(minX) || !isFinite(maxX)) return target;
+
+    const lastW = widths?.[widths.length - 1] ?? 0;
+    const bias = endBias(u, cfg.endOverhangPx + (lastW * cfg.endOverhangFactor));
 
     const out = target.clone();
-    out.x += offset;
+    const lead = Math.max(0, cfg.trackLeadPx);
+    out.x = Math.min(maxX + bias, Math.max(minX - lead, target.x + bias));
     return out;
   }
 
@@ -606,7 +655,9 @@
     const c2 = centersWithGroupY(centers, group.position.y);
     const curve = new THREE.CatmullRomCurve3(c2, false, 'catmullrom', 0.5);
 
-    const ARC_SAMPLES = Math.max(220, n * 90);
+    const bounds = computeCenterBounds(c2);
+
+    const ARC_SAMPLES = Math.max(320, n * 120);
     const lengths = curve.getLengths(ARC_SAMPLES);
     const totalLen = lengths[lengths.length - 1];
 
@@ -616,6 +667,8 @@
 
     let camX = camera.position.x;
     let camY = camera.position.y;
+    let lookAtX = camera.position.x;
+    let lookAtY = camera.position.y;
 
     const followLambda = cfg.followLambda;
     const lookAheadU   = cfg.curveLookAheadU;
@@ -627,7 +680,8 @@
 
       const elapsed = now - start;
       const uRaw = Math.min(elapsed / totalMs, 1);
-      const u = easeOutEndU(uRaw);
+      const eased = smooth01(uRaw);
+      const u = easeOutEndU(eased);
 
       const dist = u * totalLen;
       let idx = 0;
@@ -637,7 +691,7 @@
       const t2 = Math.min(1, t + lookAheadU);
 
       let target = curve.getPointAt(t2);
-      target = applyEndOverhang(target, uRaw, c2, widths);
+      target = shapeTargetWithBounds(target, uRaw, c2, widths, bounds);
 
       if (Array.isArray(words) && words.length === meshes.length) {
         const currentTime = startTime + (uRaw * durationSec);
@@ -655,8 +709,11 @@
       camX = damp(camX, target.x, followLambda, dt);
       camY = damp(camY, target.y, followLambda, dt);
 
+      lookAtX = damp(lookAtX, target.x, cfg.lookAtLambda, dt);
+      lookAtY = damp(lookAtY, target.y, cfg.lookAtLambda, dt);
+
       camera.position.set(camX, camY, cfg.cameraDistance);
-      camera.lookAt(target);
+      camera.lookAt(lookAtX, lookAtY, target.z);
 
       renderer.render(scene, camera);
 
@@ -697,7 +754,9 @@
     const c2 = centersWithGroupY(centers, group.position.y);
     const curve = new THREE.CatmullRomCurve3(c2, false, 'catmullrom', 0.5);
 
-    const ARC_SAMPLES = Math.max(220, n * 90);
+    const bounds = computeCenterBounds(c2);
+
+    const ARC_SAMPLES = Math.max(320, n * 120);
     const lengths = curve.getLengths(ARC_SAMPLES);
     const totalLen = lengths[lengths.length - 1];
 
@@ -706,6 +765,8 @@
 
     let camX = camera.position.x;
     let camY = camera.position.y;
+    let lookAtX = camera.position.x;
+    let lookAtY = camera.position.y;
 
     const revealWordLead = cfg.revealWordLead;
     const followLambda   = cfg.followLambda;
@@ -718,7 +779,8 @@
 
       const elapsed = now - start;
       const uRaw = Math.min(elapsed / totalMs, 1);
-      const u = easeOutEndU(uRaw);
+      const eased = smooth01(uRaw);
+      const u = easeOutEndU(eased);
 
       const dist = u * totalLen;
       let idx = 0;
@@ -728,7 +790,7 @@
       const t2 = Math.min(1, t + lookAheadU);
 
       let target = curve.getPointAt(t2);
-      target = applyEndOverhang(target, uRaw, c2, widths);
+      target = shapeTargetWithBounds(target, uRaw, c2, widths, bounds);
 
       const p = uRaw * (n - 1);
       const revealIdx = Math.min(n - 1, Math.floor(p + revealWordLead));
@@ -739,8 +801,11 @@
       camX = damp(camX, target.x, followLambda, dt);
       camY = damp(camY, target.y, followLambda, dt);
 
+      lookAtX = damp(lookAtX, target.x, cfg.lookAtLambda, dt);
+      lookAtY = damp(lookAtY, target.y, cfg.lookAtLambda, dt);
+
       camera.position.set(camX, camY, cfg.cameraDistance);
-      camera.lookAt(target);
+      camera.lookAt(lookAtX, lookAtY, target.z);
 
       renderer.render(scene, camera);
 
@@ -951,10 +1016,12 @@
   const CFG_SCHEMA = [
     ['textSize', 'number', 'textSize', 'word size in world units (rebuild needed)'],
     ['textDepth', 'number', 'textDepth', 'extrusion depth (rebuild needed)'],
+    ['color', 'text', 'color', 'hex color (e.g. 0xffffff)'],
     ['cameraDistance', 'number', 'cameraDistance', 'z distance of camera'],
     ['wordsPerSecond', 'number', 'wordsPerSecond', 'fallback speed mode only'],
     ['curveLookAheadU', 'number', 'curveLookAheadU', '0.01..0.08 recommended'],
     ['followLambda', 'number', 'followLambda', '12 floaty, 35 tight'],
+    ['lookAtLambda', 'number', 'lookAtLambda', 'softens look-at easing'],
     ['revealWordLead', 'number', 'revealWordLead', 'reveal early (fallback)'],
     ['spaceMultiplier', 'number', 'spaceMultiplier', 'inter-word spacing'],
     ['revealMs', 'number', 'revealMs', 'reveal anim duration ms'],
@@ -962,6 +1029,9 @@
     ['revealRise', 'number', 'revealRise', 'rise offset'],
     ['revealZ', 'number', 'revealZ', 'z push'],
     ['revealOvershoot', 'number', 'revealOvershoot', 'back overshoot'],
+    ['endOverhangFactor', 'number', 'endOverhangFactor', '× last-word width near end'],
+    ['endOverhangPx', 'number', 'endOverhangPx', 'extra push in world units'],
+    ['trackLeadPx', 'number', 'trackLeadPx', 'left clamp padding'],
     ['endOverhangBlendU', 'number', 'endOverhangBlendU', 'blend-in fraction near end'],
     ['endEaseOutU', 'number', 'endEaseOutU', 'slow end fraction'],
     ['lineHoldMsAfterComplete', 'number', 'lineHoldMsAfterComplete', 'ms pause after each line'],
@@ -1026,11 +1096,7 @@
     ohValEl.textContent = Number(cfg.endOverhangFactor).toFixed(2);
     ohEl.value = String(cfg.endOverhangFactor);
 
-    baseMat = new THREE.MeshBasicMaterial({
-      color: cfg.color,
-      transparent: true,
-      opacity: 1
-    });
+    baseMat = createBaseMaterial();
 
     return true;
   }

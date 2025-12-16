@@ -78,6 +78,14 @@ python main.py
 
 Navigate to `http://localhost:8080` in your web browser.
 
+### 7. Testing helpers
+
+Run the lightweight helper checks to confirm math helpers and clamping logic behave as expected:
+
+```bash
+node tests/animation-helpers.test.js
+```
+
 ## 🎮 Usage
 
 ### Basic Workflow

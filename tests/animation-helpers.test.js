@@ -3,7 +3,7 @@
 // Example: `node tests/animation-helpers.test.js`
 
 const assert = require('assert');
-const { clamp01, computeCenterBounds, endBias, extractEmphasisToken, parseScriptLines } = require('../public/animation-helpers');
+const { clamp01, computeCenterBounds, endBias, extractEmphasisToken, parseScriptLines, visibleHalfWidth, requiredDistanceForSpan } = require('../public/animation-helpers');
 
 function testClamp01() {
   assert.strictEqual(clamp01(-1), 0);
@@ -119,6 +119,19 @@ function testParseScriptLinesDefaultFirst() {
   });
 }
 
+function testVisibleHalfWidth() {
+  const half = visibleHalfWidth(3.5, 1, 50);
+  assert(half > 1 && half < 3, 'visible half width should scale with distance and fov');
+}
+
+function testRequiredDistanceForSpan() {
+  const base = 2;
+  const needed = requiredDistanceForSpan(4, 1, 50, base, 0.2);
+  assert(needed >= base, 'distance should never shrink below base');
+  const tighter = requiredDistanceForSpan(1, 1, 50, base, 0);
+  assert.strictEqual(tighter, base, 'small spans should use base distance');
+}
+
 function run() {
   testClamp01();
   testComputeCenterBounds();
@@ -126,6 +139,8 @@ function run() {
   testExtractEmphasisToken();
   testParseScriptLines();
   testParseScriptLinesDefaultFirst();
+  testVisibleHalfWidth();
+  testRequiredDistanceForSpan();
   console.log('animation-helpers: all tests passed');
 }
 

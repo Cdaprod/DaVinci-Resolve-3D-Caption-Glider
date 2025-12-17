@@ -49,6 +49,25 @@
     return e * maxBias;
   }
 
+  function visibleHalfWidth(distance, aspect = 1, fovDeg = 50) {
+    const fov = Math.max(1e-3, Number(fovDeg) || 50) * Math.PI / 180;
+    const asp = Math.max(0.1, Number(aspect) || 1);
+    return Math.tan(fov / 2) * Math.max(0, distance) * asp;
+  }
+
+  function requiredDistanceForSpan(span, aspect = 1, fovDeg = 50, baseDistance = 1, padding = 0) {
+    const safeSpan = Math.max(0, span) + Math.max(0, padding) * 2;
+    if (safeSpan === 0) return baseDistance;
+
+    const fov = Math.max(1e-3, Number(fovDeg) || 50) * Math.PI / 180;
+    const asp = Math.max(0.1, Number(aspect) || 1);
+    const denom = Math.tan(fov / 2) * asp;
+    if (!isFinite(denom) || denom <= 0) return baseDistance;
+
+    const needed = (safeSpan / 2) / denom;
+    return Math.max(baseDistance, needed);
+  }
+
   function stripControlTokens(text = '') {
     let pauseMs = 0;
     let holdMs = 0;
@@ -124,6 +143,8 @@
     damp,
     computeCenterBounds,
     endBias,
+    visibleHalfWidth,
+    requiredDistanceForSpan,
     extractEmphasisToken,
     parseScriptLines,
   };

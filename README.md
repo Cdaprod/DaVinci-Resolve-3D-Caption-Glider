@@ -11,6 +11,7 @@ A beautiful 3D animated caption system for DaVinci Resolve that automatically sy
 - 🎬 **Auto-sync with DaVinci Resolve** - Reads transcription directly from your timeline
 - 🎯 **Word-level timing** - Each word appears exactly when spoken
 - 🎨 **3D animated text** - Smooth camera glide with pop-in reveal animations
+- 🛰️ **Auto-framed camera** - Active words and neighbors stay in view across portrait/landscape
 - ⚡ **Real-time preview** - See your captions before adding to timeline
 - 🔄 **One-click export** - Send captions back to Resolve as subtitle track
 - 🎭 **Customizable styling** - Adjust colors, timing, animation curves, and more
@@ -180,6 +181,8 @@ You can switch fonts via presets (Akira Expanded, Impact, Inter Black via CDN, A
 Use **bold** markers in your transcript or fallback lines to flag semantic emphasis. The default “Documentary” emphasis profile stacks semantic emphasis (scale 1.08 with a 260ms settle and +120ms hold) with terminal-word cadence (+0.45× word-width drift and +300ms hold) so bold last words land with a gentle overhang. A “Minimal” profile is also available for a lighter touch.
 
 When you enable `keepPreviousLinesVisible`, keep `stackLines` on to preserve legibility; stacked captions reflow using their measured heights and the configured gap so lines don’t overlap. If you disable stacking, completed lines clear automatically to keep the frame clean. Bold words render with a brighter glow on top of the emphasis scaling so semantic emphasis is visible even with the white text palette.
+
+Camera distance acts as a baseline: the renderer automatically expands the distance (respecting your FOV/aspect) when wide lines or highlighted words would otherwise fall outside the viewport, keeping the active word plus its neighbors framed in both portrait and landscape orientations.
 
 ### Profile scripting with `#A/#B/#C` (default-first)
 

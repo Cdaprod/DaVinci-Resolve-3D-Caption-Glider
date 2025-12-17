@@ -1099,6 +1099,41 @@
     return out;
   }
 
+  const requiredDistanceForSpan = (window.AnimationHelpers && typeof window.AnimationHelpers.requiredDistanceForSpan === 'function')
+    ? window.AnimationHelpers.requiredDistanceForSpan
+    : function requiredDistanceForSpanFallback(span, aspect = 1, fovDeg = 50, baseDistance = 1, padding = 0) {
+        const safeSpan = Math.max(0, span) + Math.max(0, padding) * 2;
+        if (safeSpan === 0) return baseDistance;
+        const fov = Math.max(1e-3, Number(fovDeg) || 50) * Math.PI / 180;
+        const asp = Math.max(0.1, Number(aspect) || 1);
+        const denom = Math.tan(fov / 2) * asp;
+        if (!isFinite(denom) || denom <= 0) return baseDistance;
+        const needed = (safeSpan / 2) / denom;
+        return Math.max(baseDistance, needed);
+      };
+
+  function computeFocusSpan(activeIdx, widths = [], bounds) {
+    const span = Math.max(0, (bounds?.maxX ?? 0) - (bounds?.minX ?? 0));
+    if (!Array.isArray(widths) || widths.length === 0) return Math.max(0.6, span * 0.5);
+
+    const safeIdx = Math.max(0, Math.min(typeof activeIdx === 'number' && activeIdx >= 0 ? activeIdx : Math.floor(widths.length / 2), widths.length - 1));
+    const prev = Number(widths[Math.max(0, safeIdx - 1)] || 0);
+    const cur = Number(widths[safeIdx] || 0);
+    const next = Number(widths[Math.min(widths.length - 1, safeIdx + 1)] || 0);
+
+    const trio = prev + cur + next;
+    const avg = widths.reduce((s, w) => s + (Number(w) || 0), 0) / Math.max(1, widths.length);
+    const maxW = widths.reduce((m, w) => Math.max(m, Number(w) || 0), 0);
+
+    return Math.max(trio, avg * 2.4, maxW * 1.25, span * 0.5, 0.6);
+  }
+
+  function frameCameraDistance(baseDistance, activeIdx, widths, bounds) {
+    const focusSpan = computeFocusSpan(activeIdx, widths, bounds);
+    const padding = Math.max(0.05, cfg.trackLeadPx + cfg.endOverhangPx * 0.5);
+    return requiredDistanceForSpan(focusSpan, camera.aspect, camera.fov, baseDistance, padding);
+  }
+
   function easeOutEndU(u) {
     const e = clamp01(cfg.endEaseOutU);
     if (e <= 0.0001) return u;
@@ -1156,7 +1191,8 @@
     const followLambda = cfg.followLambda * (lineProfile?.followMult ?? 1);
     const lookAheadU   = Math.max(0, cfg.curveLookAheadU + (lineProfile?.lookAheadOffset ?? 0));
     const lookLambda   = cfg.lookAtLambda * (lineProfile?.lookAtMult ?? 1);
-    const camDistance  = cfg.cameraDistance + (lineProfile?.cameraDistanceOffset ?? 0);
+    const baseCamDistance  = cfg.cameraDistance + (lineProfile?.cameraDistanceOffset ?? 0);
+    let camDistance = baseCamDistance;
     let lastNow = performance.now();
 
     function frame(now) {
@@ -1201,6 +1237,9 @@
 
       camX = damp(camX, target.x, Math.max(0.1, followLambda * followScale), dt);
       camY = damp(camY, target.y, Math.max(0.1, followLambda * followScale), dt);
+
+      const desiredDistance = frameCameraDistance(baseCamDistance, activeIdx, widths, bounds);
+      camDistance = damp(camDistance, desiredDistance, Math.max(2.5, followLambda * 0.55), dt);
 
       lookAtX = damp(lookAtX, target.x, Math.max(0.1, lookLambda * lookScale), dt);
       lookAtY = damp(lookAtY, target.y, Math.max(0.1, lookLambda * lookScale), dt);
@@ -1274,7 +1313,8 @@
     const followLambda   = cfg.followLambda * (lineProfile?.followMult ?? 1);
     const lookAheadU     = Math.max(0, cfg.curveLookAheadU + (lineProfile?.lookAheadOffset ?? 0));
     const lookLambda     = cfg.lookAtLambda * (lineProfile?.lookAtMult ?? 1);
-    const camDistance    = cfg.cameraDistance + (lineProfile?.cameraDistanceOffset ?? 0);
+    const baseCamDistance    = cfg.cameraDistance + (lineProfile?.cameraDistanceOffset ?? 0);
+    let camDistance = baseCamDistance;
     let lastNow = performance.now();
 
     function frame(now){
@@ -1312,6 +1352,9 @@
 
       camX = damp(camX, target.x, Math.max(0.1, followLambda * followScale), dt);
       camY = damp(camY, target.y, Math.max(0.1, followLambda * followScale), dt);
+
+      const desiredDistance = frameCameraDistance(baseCamDistance, activeIdx, widths, bounds);
+      camDistance = damp(camDistance, desiredDistance, Math.max(2.5, followLambda * 0.55), dt);
 
       lookAtX = damp(lookAtX, target.x, Math.max(0.1, lookLambda * lookScale), dt);
       lookAtY = damp(lookAtY, target.y, Math.max(0.1, lookLambda * lookScale), dt);

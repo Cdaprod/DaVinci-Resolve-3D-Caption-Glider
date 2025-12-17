@@ -178,7 +178,7 @@ const cfg = {
 
 You can switch fonts via presets (Akira Expanded, Impact, Inter Black via CDN, Apple Garamond Regular/Italic, or a custom URL) and swap reveal styles between the default rise and the grow-from-below effect directly in the UI.
 
-Use **bold** markers in your transcript or fallback lines to flag semantic emphasis. The default “Documentary” emphasis profile stacks semantic emphasis (scale 1.08 with a 260ms settle and +120ms hold) with terminal-word cadence (+0.45× word-width drift and +300ms hold) so bold last words land with a gentle overhang. A “Minimal” profile is also available for a lighter touch.
+Use **bold** markers in your transcript or fallback lines to flag semantic emphasis. The default “Documentary” emphasis profile stacks semantic emphasis (scale 1.08 with a 260ms settle and +120ms hold) with terminal-word cadence (+0.45× word-width drift and +300ms hold) so bold last words land with a gentle overhang. Active words now receive a per-frame glow/scale lift (with softened neighbor glow) so emphasis stays visible as the camera glides through each line. A “Minimal” profile is also available for a lighter touch.
 
 When you enable `keepPreviousLinesVisible`, keep `stackLines` on to preserve legibility; stacked captions reflow using their measured heights and the configured gap so lines don’t overlap. If you disable stacking, completed lines clear automatically to keep the frame clean. Bold words render with a brighter glow on top of the emphasis scaling so semantic emphasis is visible even with the white text palette.
 

@@ -365,6 +365,12 @@
     endOverhangBlendU: 0.10,
     endEaseOutU:       0.14,
 
+    // Highlight smoothing (kept internal; UI remains uncluttered)
+    highlightLambda: 12,
+    neighborHighlight: 0.35,
+    activeGlowBoost: 0.22,
+    neighborGlowBoost: 0.12,
+
     keepPreviousLinesVisible: false,
     lineHoldMsAfterComplete:  620,
 
@@ -535,7 +541,7 @@
   function createBaseMaterial() {
     return new THREE.MeshPhongMaterial({
       color: cfg.color,
-      emissive: new THREE.Color(cfg.color).multiplyScalar(0.18),
+      emissive: new THREE.Color(cfg.color).multiplyScalar(0.22),
       specular: new THREE.Color(0xffffff),
       shininess: 85,
       transparent: true,
@@ -549,10 +555,10 @@
     if (!mat) return;
     const base = new THREE.Color(cfg.color);
     mat.color.copy(base);
-    const glow = isEmphasis ? 0.36 : 0.18;
+    const glow = isEmphasis ? 0.45 : 0.22;
     mat.emissive.copy(base).multiplyScalar(glow);
-    mat.shininess = isEmphasis ? 115 : 85;
-    mat.emissiveIntensity = isEmphasis ? 1.4 : 1.0;
+    mat.shininess = isEmphasis ? 125 : 90;
+    mat.emissiveIntensity = isEmphasis ? 1.55 : 1.05;
   }
 
   let lineObjs = [];
@@ -953,6 +959,7 @@
       mesh.userData.basePos = mesh.position.clone();
       mesh.userData.emphasis = !!emphasisFlags[i];
       mesh.userData.isLast = (i === parsedWords.length - 1);
+      mesh.userData.activeWeight = 0;
 
       group.add(mesh);
       meshes.push(mesh);
@@ -1063,6 +1070,44 @@
       mesh.material.opacity = 1;
       mesh.scale.setScalar(emphasisScaleFor(mesh, cfg.revealMs + (profile?.emphasisSettleMs ?? 0), profile));
       mesh.position.copy(mesh.userData.basePos);
+    }
+  }
+
+  function updateActiveHighlight(meshes, activeIdx, emphasisProfile, dt) {
+    if (!Array.isArray(meshes)) return;
+    const baseColor = new THREE.Color(cfg.color);
+    const smooth = Math.max(1, cfg.highlightLambda || 12);
+
+    const active = (typeof activeIdx === 'number' && activeIdx >= 0) ? activeIdx : null;
+
+    for (let i = 0; i < meshes.length; i++) {
+      const m = meshes[i];
+      if (!m) continue;
+
+      const neighborWeight = Math.max(0, Number(cfg.neighborHighlight || 0));
+      const target = (active === null)
+        ? 0
+        : (i === active ? 1 : (Math.abs(i - active) === 1 ? neighborWeight : 0));
+      const prev = Number(m.userData.activeWeight || 0);
+      const next = damp(prev, target, smooth, dt);
+      m.userData.activeWeight = next;
+
+      const emphasisTone = m.userData.emphasis ? 0.45 : 0.22;
+      const boost = (i === activeIdx)
+        ? (cfg.activeGlowBoost || 0.22)
+        : (cfg.neighborGlowBoost || 0.12);
+      const emissiveScale = emphasisTone + boost * next;
+      m.material.emissive.copy(baseColor).multiplyScalar(emissiveScale);
+      m.material.emissiveIntensity = 1.05 + (m.userData.emphasis ? 0.35 : 0.15) * next;
+
+      // Keep emphasis scale visible even after reveal completes
+      if (m.userData.revealStart === null) {
+        const baseScale = m.userData.emphasis
+          ? 1 + ((emphasisProfile?.emphasisScale ?? 1) - 1) * 0.65
+          : 1;
+        const activeScale = 1 + 0.08 * next;
+        m.scale.setScalar(baseScale * activeScale);
+      }
     }
   }
 
@@ -1209,7 +1254,11 @@
       while (idx < lengths.length && lengths[idx] < dist) idx++;
 
       const t = idx / (lengths.length - 1);
-      const t2 = Math.min(1, t + lookAheadU);
+      const activeProgress = (typeof activeIdx === 'number' && activeIdx >= 0)
+        ? clamp01(activeIdx / Math.max(1, n - 1))
+        : 0;
+      const adjustedLookAhead = lookAheadU * (0.55 + 0.45 * activeProgress);
+      const t2 = Math.min(1, t + adjustedLookAhead);
 
       const currentTime = startTime + (uRaw * durationSec);
       const activeIdx = computeActiveWordIndex(Array.isArray(words) && words.length === meshes.length ? words : null, currentTime, uRaw, n);
@@ -1218,6 +1267,11 @@
       const bias = computeEmphasisBias(emphasisProfile, activeIdx, emphasisFlags, widths, uRaw) + (lineProfile?.endBiasPx ?? 0);
 
       let target = curve.getPointAt(t2);
+      const focus = (activeIdx >= 0 && activeIdx < c2.length) ? c2[activeIdx] : null;
+      if (focus) {
+        const blend = Math.min(0.72, 0.28 + (isEmphasis ? 0.10 : 0) + (isTerminal ? 0.12 : 0));
+        target.lerp(focus, blend);
+      }
       target = shapeTargetWithBounds(target, uRaw, c2, widths, bounds, bias);
 
       if (Array.isArray(words) && words.length === meshes.length) {
@@ -1231,6 +1285,8 @@
       }
 
       for (const m of meshes) tickReveal(m, now);
+
+      updateActiveHighlight(meshes, activeIdx, emphasisProfile, dt);
 
       const followScale = (isEmphasis ? (emphasisProfile?.emphasisFollowMult ?? 1) : 1) * (isTerminal ? (emphasisProfile?.terminalFollowMult ?? 1) : 1);
       const lookScale = (isEmphasis ? (emphasisProfile?.emphasisLookAtMult ?? 1) : 1) * (isTerminal ? (emphasisProfile?.terminalLookAtMult ?? 1) : 1);
@@ -1331,7 +1387,11 @@
       while (idx < lengths.length && lengths[idx] < dist) idx++;
 
       const t = idx / (lengths.length - 1);
-      const t2 = Math.min(1, t + lookAheadU);
+      const activeProgress = (typeof activeIdx === 'number' && activeIdx >= 0)
+        ? clamp01(activeIdx / Math.max(1, n - 1))
+        : 0;
+      const adjustedLookAhead = lookAheadU * (0.55 + 0.45 * activeProgress);
+      const t2 = Math.min(1, t + adjustedLookAhead);
 
       const activeIdx = computeActiveWordIndex(null, 0, uRaw, n);
       const isEmphasis = activeIdx >= 0 && Array.isArray(emphasisFlags) && emphasisFlags[activeIdx];
@@ -1339,6 +1399,11 @@
       const bias = computeEmphasisBias(emphasisProfile, activeIdx, emphasisFlags, widths, uRaw) + (lineProfile?.endBiasPx ?? 0);
 
       let target = curve.getPointAt(t2);
+      const focus = (activeIdx >= 0 && activeIdx < c2.length) ? c2[activeIdx] : null;
+      if (focus) {
+        const blend = Math.min(0.72, 0.28 + (isEmphasis ? 0.10 : 0) + (isTerminal ? 0.12 : 0));
+        target.lerp(focus, blend);
+      }
       target = shapeTargetWithBounds(target, uRaw, c2, widths, bounds, bias);
 
       const p = uRaw * (n - 1);
@@ -1346,6 +1411,8 @@
       for (let k = 0; k <= revealIdx; k++) startReveal(meshes[k], now);
 
       for (const m of meshes) tickReveal(m, now);
+
+      updateActiveHighlight(meshes, activeIdx, emphasisProfile, dt);
 
       const followScale = (isEmphasis ? (emphasisProfile?.emphasisFollowMult ?? 1) : 1) * (isTerminal ? (emphasisProfile?.terminalFollowMult ?? 1) : 1);
       const lookScale = (isEmphasis ? (emphasisProfile?.emphasisLookAtMult ?? 1) : 1) * (isTerminal ? (emphasisProfile?.terminalLookAtMult ?? 1) : 1);

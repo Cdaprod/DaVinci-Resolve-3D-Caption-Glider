@@ -417,7 +417,7 @@
       lookAheadOffset: 0.014,
       cameraDistanceOffset: -0.07,
       holdMs: 90,
-      revealStyle: 'rise',
+      revealStyle: 'slide-up',
       endBiasPx: 0.05,
     },
     C: {
@@ -482,6 +482,7 @@
     { id: 'slide-up', label: 'Slide up (default)' },
     { id: 'grow-up', label: 'Grow from below / behind' },
     { id: 'bloom', label: 'Word bloom (soft scale pop)' },
+    { id: 'fade-scale', label: 'Fade + scale in' },
     { id: 'word-fade', label: 'Word fade in' },
     { id: 'char-fade', label: 'Character fade in' },
     { id: 'typewriter', label: 'Character typewriter sweep' }
@@ -1159,6 +1160,12 @@
       params.rise = cfg.revealRise * 0.25;
       params.depth = cfg.revealZ * 0.35;
       params.opacityFloor = 0.12;
+    } else if (style === 'fade-scale') {
+      params.startScale = Math.max(0.9, cfg.revealStartScale * 0.92);
+      params.popScale = Math.max(params.startScale, cfg.revealPopScale * 0.98);
+      params.rise = cfg.revealRise * 0.22;
+      params.depth = cfg.revealZ * 0.3;
+      params.opacityFloor = 0;
     } else if (style === 'word-fade') {
       params.startScale = 1;
       params.popScale = 1;
@@ -1238,6 +1245,10 @@
     if (style === 'word-fade') {
       uni = emScale;
       axisX = 1;
+      opacity = opacityEase;
+    } else if (style === 'fade-scale') {
+      uni = THREE.MathUtils.lerp(startScale, 1, liftEase) * emScale;
+      axisX = THREE.MathUtils.lerp(axisXStart, axisXEnd, liftEase);
       opacity = opacityEase;
     } else if (style === 'char-fade') {
       const chars = Math.max(1, mesh.userData.wordLength || 1);
@@ -1756,18 +1767,34 @@
     else startLine();
   }
 
-  function replay() {
-    if (!fontRef) return;
+  async function replay() {
     if (isPlaying) return;
+    try {
+      setStatus('Rebuilding + replaying…');
+      const font = await loadFontFromSelection();
+      fontRef = font;
 
-    isPlaying = true;
-    clearAllLinesFromScene();
+      clearAllLinesFromScene();
 
-    camera.position.set(0, 0, cfg.cameraDistance);
-    camera.lookAt(new THREE.Vector3(0,0,0));
-    render();
+      if (transcriptionData && Array.isArray(transcriptionData.words) && transcriptionData.words.length) {
+        const wpl = Number(wplEl.value);
+        const timedLines = transcriptionToTimedLines(transcriptionData, wpl);
+        buildFromTimedLines(font, timedLines);
+      } else {
+        const lines = await loadLines(cfg.linesUrl);
+        buildFromPlainLines(font, lines);
+      }
 
-    runSequence(0);
+      camera.position.set(0, 0, cfg.cameraDistance);
+      camera.lookAt(new THREE.Vector3(0,0,0));
+      render();
+
+      isPlaying = true;
+      runSequence(0);
+    } catch (err) {
+      isPlaying = false;
+      setStatus('Replay failed: ' + String(err));
+    }
   }
 
   function buildFromTimedLines(font, timedLines) {

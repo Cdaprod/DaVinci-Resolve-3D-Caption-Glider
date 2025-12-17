@@ -383,6 +383,15 @@
 
   const STORAGE_KEY = 'captioner_state_v1';
   const STORAGE_SEED_URLS = ['./localStorage.json', './alternate-test-versions/localStorage.json'];
+  const FALLBACK_DEMO_LINES = [
+    'Cinematic scripting starts in default (no marker required)',
+    '#A Calm dolly profile slows the follow and softens reveals',
+    '[PAUSE=220]',
+    '#B Assertive pacing tightens follow and pops punctuation',
+    '[HOLD=320]',
+    '#C Dramatic settle widens the lens and lingers on the last word',
+    '#default Return to the default glide once the moods finish'
+  ];
 
   const DEFAULT_LINE_PROFILE_ID = 'default';
 
@@ -981,10 +990,17 @@
   }
 
   async function loadLines(url) {
-    const res = await fetch(url, { cache: 'no-store' });
-    if(!res.ok) throw new Error(`Failed to load lines: ${res.status} ${res.statusText}`);
-    const txt = await res.text();
-    return txt.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    try {
+      const res = await fetch(url, { cache: 'no-store' });
+      if(!res.ok) throw new Error(`Failed to load lines: ${res.status} ${res.statusText}`);
+      const txt = await res.text();
+      const parsed = txt.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+      if (parsed.length === 0) throw new Error('lines file was empty');
+      return parsed;
+    } catch (err) {
+      console.warn('loadLines fallback to built-in demo:', err);
+      return [...FALLBACK_DEMO_LINES];
+    }
   }
 
   async function loadFontFromSelection(forceUrl) {
@@ -1801,6 +1817,11 @@
       render();
 
       isPlaying = true;
+      if (lineObjs.length === 0) {
+        isPlaying = false;
+        setStatus('No lines to play.');
+        return;
+      }
       runSequence(0);
     } catch (err) {
       isPlaying = false;

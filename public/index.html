@@ -1742,6 +1742,17 @@
     const current = lineObjs[lineIdx];
 
     const startLine = () => {
+      // Reset mesh visibility/opacities in case of prior runs
+      if (Array.isArray(current.meshes)) {
+        for (const m of current.meshes) {
+          if (!m) continue;
+          m.visible = true;
+          m.material.opacity = 0;
+          m.userData.revealed = false;
+          m.userData.revealStart = null;
+        }
+      }
+
       if (cfg.keepPreviousLinesVisible && cfg.stackLines) {
         stackedGroups.push(current.group);
         enforceStackLimit();

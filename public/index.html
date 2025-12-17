@@ -1249,19 +1249,19 @@
       const eased = smooth01(uRaw);
       const u = easeOutEndU(eased);
 
+      const currentTime = startTime + (uRaw * durationSec);
+      const activeIdx = computeActiveWordIndex(Array.isArray(words) && words.length === meshes.length ? words : null, currentTime, uRaw, n);
       const dist = u * totalLen;
       let idx = 0;
       while (idx < lengths.length && lengths[idx] < dist) idx++;
 
-      const t = idx / (lengths.length - 1);
+      const denom = Math.max(1, lengths.length - 1);
+      const t = idx / denom;
       const activeProgress = (typeof activeIdx === 'number' && activeIdx >= 0)
         ? clamp01(activeIdx / Math.max(1, n - 1))
         : 0;
       const adjustedLookAhead = lookAheadU * (0.55 + 0.45 * activeProgress);
       const t2 = Math.min(1, t + adjustedLookAhead);
-
-      const currentTime = startTime + (uRaw * durationSec);
-      const activeIdx = computeActiveWordIndex(Array.isArray(words) && words.length === meshes.length ? words : null, currentTime, uRaw, n);
       const isEmphasis = activeIdx >= 0 && Array.isArray(emphasisFlags) && emphasisFlags[activeIdx];
       const isTerminal = activeIdx === (n - 1);
       const bias = computeEmphasisBias(emphasisProfile, activeIdx, emphasisFlags, widths, uRaw) + (lineProfile?.endBiasPx ?? 0);
@@ -1382,18 +1382,19 @@
       const eased = smooth01(uRaw);
       const u = easeOutEndU(eased);
 
+      const activeIdx = computeActiveWordIndex(null, 0, uRaw, n);
       const dist = u * totalLen;
       let idx = 0;
       while (idx < lengths.length && lengths[idx] < dist) idx++;
 
-      const t = idx / (lengths.length - 1);
+      const denom = Math.max(1, lengths.length - 1);
+      const t = idx / denom;
       const activeProgress = (typeof activeIdx === 'number' && activeIdx >= 0)
         ? clamp01(activeIdx / Math.max(1, n - 1))
         : 0;
       const adjustedLookAhead = lookAheadU * (0.55 + 0.45 * activeProgress);
       const t2 = Math.min(1, t + adjustedLookAhead);
 
-      const activeIdx = computeActiveWordIndex(null, 0, uRaw, n);
       const isEmphasis = activeIdx >= 0 && Array.isArray(emphasisFlags) && emphasisFlags[activeIdx];
       const isTerminal = activeIdx === (n - 1);
       const bias = computeEmphasisBias(emphasisProfile, activeIdx, emphasisFlags, widths, uRaw) + (lineProfile?.endBiasPx ?? 0);

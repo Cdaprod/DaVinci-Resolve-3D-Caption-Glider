@@ -3,7 +3,7 @@
 // Example: `node tests/animation-helpers.test.js`
 
 const assert = require('assert');
-const { clamp01, computeCenterBounds, endBias, extractEmphasisToken, parseScriptLines, stripControlTokens, normalizeProfileToken, visibleHalfWidth, requiredDistanceForSpan, sanitizePersistedState } = require('../public/animation-helpers');
+const { clamp01, computeCenterBounds, endBias, extractEmphasisToken, parseScriptLines, stripControlTokens, normalizeProfileToken, visibleHalfWidth, requiredDistanceForSpan, sanitizePersistedState, normalizePersistedPayload } = require('../public/animation-helpers');
 
 function testClamp01() {
   assert.strictEqual(clamp01(-1), 0);
@@ -161,6 +161,19 @@ function testSanitizePersistedState() {
   assert.deepStrictEqual(empty, {});
 }
 
+function testNormalizePersistedPayload() {
+  const raw = {
+    captioner_state_v1: JSON.stringify({ cfg: { followLambda: 12 }, wpl: 7 }),
+  };
+  const parsed = normalizePersistedPayload(raw);
+  assert.deepStrictEqual(parsed, { cfg: { followLambda: 12 }, wpl: 7 });
+
+  const nested = normalizePersistedPayload('{"cfg":{"fontId":"helvetiker"}}');
+  assert.deepStrictEqual(nested, { cfg: { fontId: 'helvetiker' } });
+
+  assert.strictEqual(normalizePersistedPayload(5), null);
+}
+
 function run() {
   testClamp01();
   testComputeCenterBounds();
@@ -173,6 +186,7 @@ function run() {
   testVisibleHalfWidth();
   testRequiredDistanceForSpan();
   testSanitizePersistedState();
+  testNormalizePersistedPayload();
   console.log('animation-helpers: all tests passed');
 }
 

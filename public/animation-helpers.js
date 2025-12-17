@@ -112,6 +112,22 @@
     return out;
   }
 
+  function normalizePersistedPayload(raw) {
+    if (raw == null) return null;
+    if (typeof raw === 'string') {
+      try { return normalizePersistedPayload(JSON.parse(raw)); } catch (_) { return null; }
+    }
+
+    if (typeof raw !== 'object') return null;
+
+    if (raw.captioner_state_v1) {
+      const inner = normalizePersistedPayload(raw.captioner_state_v1);
+      if (inner) return inner;
+    }
+
+    return raw;
+  }
+
   function normalizeProfileToken(token = '') {
     const trimmed = String(token || '').trim();
     if (!trimmed) return 'default';
@@ -173,6 +189,7 @@
     requiredDistanceForSpan,
     extractEmphasisToken,
     sanitizePersistedState,
+    normalizePersistedPayload,
     parseScriptLines,
     stripControlTokens,
     normalizeProfileToken,

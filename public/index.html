@@ -717,9 +717,7 @@
   function readLocalState() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      return parsed?.captioner_state_v1 || parsed;
+      return normalizePersistedPayload(raw);
     } catch (_) {
       return null;
     }
@@ -731,7 +729,7 @@
         const res = await fetch(url, { cache: 'no-store' });
         if (!res.ok) continue;
         const data = await res.json();
-        const payload = data?.captioner_state_v1 || data;
+        const payload = normalizePersistedPayload(data);
         if (payload && typeof payload === 'object') return payload;
       } catch (_) { /* ignore */ }
     }
@@ -822,7 +820,21 @@
             if (val !== undefined && val !== null) out[key] = String(val);
           }
         }
-        return out;
+      return out;
+    };
+  const normalizePersistedPayload = (window.AnimationHelpers && typeof window.AnimationHelpers.normalizePersistedPayload === 'function')
+    ? window.AnimationHelpers.normalizePersistedPayload
+    : function fallbackNormalize(raw) {
+        if (raw == null) return null;
+        if (typeof raw === 'string') {
+          try { return fallbackNormalize(JSON.parse(raw)); } catch (_) { return null; }
+        }
+        if (typeof raw !== 'object') return null;
+        if (raw.captioner_state_v1) {
+          const inner = fallbackNormalize(raw.captioner_state_v1);
+          if (inner) return inner;
+        }
+        return raw;
       };
   function emphasisScaleFor(mesh, elapsedMs, profile) {
     if (!mesh?.userData?.emphasis || !profile) return 1;

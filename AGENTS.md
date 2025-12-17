@@ -8,6 +8,7 @@ This file applies to the entire repository.
 - Whenever cfg defaults or emphasis/reveal presets change, update README and in-app hints in `public/index.html` to stay in sync.
 - Keep changes minimal and idempotent; prefer extending existing files over introducing new ones.
 - Persist any new configurable UI control into localStorage (via `captioner_state_v1`) and keep `public/localStorage.json` (and `public/alternate-test-versions/localStorage.json` when present) in sync as the seed/default override when defaults shift.
+- Seed files should store `captioner_state_v1` as proper JSON objects (not double-encoded strings); normalization logic should continue to accept legacy stringified payloads but new seeds must remain clean for readability.
 - Profile-token parsing must remain default-first: start in the default profile unless a `#A/#B/#C` switch is encountered. Directive-only lines switch the active profile without rendering text, and `[PAUSE=ms]` / `[HOLD=ms]` tokens should accumulate onto the next content line. Document any new profile behaviors in README + UI hints.
 - Demo content should exercise the default-first script language (`#A/#B/#C`, `#default`, pauses/holds, and bold emphasis) so cinematic profiles stay verifiable in preview builds; keep `public/demo-lines.txt` aligned with the latest profile intent.
 - Keep the UI responsive for portrait/landscape testing; updates to `public/index.html` should preserve the mobile-friendly width variable and collapsed transforms that avoid page scrolling.

@@ -179,6 +179,8 @@ You can switch fonts via presets (Akira Expanded, Impact, Inter Black via CDN, A
 
 Use **bold** markers in your transcript or fallback lines to flag semantic emphasis. The default “Documentary” emphasis profile stacks semantic emphasis (scale 1.08 with a 260ms settle and +120ms hold) with terminal-word cadence (+0.45× word-width drift and +300ms hold) so bold last words land with a gentle overhang. A “Minimal” profile is also available for a lighter touch.
 
+When you enable `keepPreviousLinesVisible`, keep `stackLines` on to preserve legibility; stacked captions reflow using their measured heights and the configured gap so lines don’t overlap. If you disable stacking, completed lines clear automatically to keep the frame clean. Bold words render with a brighter glow on top of the emphasis scaling so semantic emphasis is visible even with the white text palette.
+
 ### Profile scripting with `#A/#B/#C` (default-first)
 
 You start in the default profile automatically—no leading token required. Add a directive-only line to switch moods, or prefix a line to switch and render on the same row:

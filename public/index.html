@@ -5,7 +5,11 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no" />
   <title>3D Glide-Over-Line Captioner (Resolve Transcript Sync)</title>
   <style>
-    html, body { margin:0; padding:0; width:100%; height:100%; background:#000; overflow:hidden; }
+    :root {
+      --ui-width: clamp(280px, 30vw, 340px);
+    }
+
+    html, body { margin:0; padding:0; width:100%; height:100%; background:#000; overflow:hidden; overscroll-behavior: none; }
     canvas { width:100%; height:100%; display:block; }
 
     #ui {
@@ -20,7 +24,7 @@
       color: #fff;
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       font-size: 12px;
-      width: 290px;
+      width: var(--ui-width);
       max-height: calc(100vh - 20px);
       overflow: hidden;
       display: flex;
@@ -33,7 +37,7 @@
 
     /* collapsed state: tuck it mostly offscreen but keep a tab */
     #ui.collapsed {
-      transform: translateX(calc(100% - 300px));
+      transform: translateX(calc(var(--ui-width) - 68px));
       opacity: 0.92;
     }
 
@@ -73,7 +77,7 @@
     #ui.collapsed #uiBody { display: none; }
     #ui.collapsed {
       padding: 10px 8px;
-      width: 290px; /* keep same width for consistent slide */
+      width: var(--ui-width); /* keep same width for consistent slide */
     }
     #ui.collapsed #uiHeader {
       margin-bottom: 0;
@@ -120,6 +124,7 @@
       flex: 1;
       overflow-y: auto;
       padding-right: 4px;
+      -webkit-overflow-scrolling: touch;
     }
 
     #uiBody::-webkit-scrollbar { width: 8px; }
@@ -208,6 +213,30 @@
     .cfgactions button.primary {
       background: rgba(0, 204, 255, 0.85);
       color: #06141a;
+    }
+
+    @media (max-width: 900px) {
+      :root { --ui-width: clamp(280px, 44vw, 360px); }
+      #ui { right: 8px; top: 8px; max-height: calc(100vh - 16px); }
+      #ui.collapsed { transform: translateX(calc(var(--ui-width) - 64px)); }
+    }
+
+    @media (max-width: 720px), (orientation: portrait) {
+      :root { --ui-width: calc(100vw - 24px); }
+      #ui {
+        left: 12px;
+        right: 12px;
+        top: 12px;
+        width: var(--ui-width);
+        max-height: calc(100vh - 24px);
+      }
+      #ui.collapsed {
+        transform: translateY(calc(100% - 64px));
+      }
+    }
+
+    @media (orientation: landscape) and (max-height: 520px) {
+      #ui { top: 8px; right: 8px; max-height: calc(100vh - 12px); }
     }
   </style>
 </head>
@@ -516,11 +545,23 @@
 
   let baseMat = createBaseMaterial();
 
+  function applyMaterialTone(mat, isEmphasis = false) {
+    if (!mat) return;
+    const base = new THREE.Color(cfg.color);
+    mat.color.copy(base);
+    const glow = isEmphasis ? 0.36 : 0.18;
+    mat.emissive.copy(base).multiplyScalar(glow);
+    mat.shininess = isEmphasis ? 115 : 85;
+    mat.emissiveIntensity = isEmphasis ? 1.4 : 1.0;
+  }
+
   let lineObjs = [];
   let transcriptionData = null;
   let fontRef = null;
 
   let stackedLineCount = 0;
+  const stackedGroups = [];
+  const tmpBox = new THREE.Box3();
 
   // -------------------------
   // UI refs
@@ -901,6 +942,7 @@
 
       const mat = baseMat.clone();
       mat.opacity = 0;
+      applyMaterialTone(mat, !!emphasisFlags[i]);
 
       const mesh = new THREE.Mesh(d.geom, mat);
       mesh.position.set(cursorX, 0, 0);
@@ -1307,7 +1349,28 @@
     for (const obj of lineObjs) {
       if (obj?.group) scene.remove(obj.group);
     }
+    stackedGroups.length = 0;
     stackedLineCount = 0;
+  }
+
+  function computeGroupHeight(group) {
+    if (!group) return cfg.textSize;
+    tmpBox.makeEmpty();
+    tmpBox.setFromObject(group);
+    if (tmpBox.isEmpty()) return cfg.textSize;
+    return Math.max(cfg.textSize * 0.9, tmpBox.max.y - tmpBox.min.y);
+  }
+
+  function reflowStackedGroups() {
+    if (!cfg.keepPreviousLinesVisible || !cfg.stackLines) return;
+    const gap = Number(cfg.stackLineGap || 0.22);
+    let cursor = 0;
+    for (const g of stackedGroups) {
+      if (!g) continue;
+      g.position.y = -cursor;
+      cursor += computeGroupHeight(g) + gap;
+    }
+    stackedLineCount = stackedGroups.length;
   }
 
   function enforceStackLimit() {
@@ -1315,31 +1378,13 @@
     if (!cfg.stackLines) return;
     const max = Math.max(1, Number(cfg.stackMaxLines || 1));
 
-    while (stackedLineCount > max) {
-      for (let i = 0; i < lineObjs.length; i++) {
-        const g = lineObjs[i]?.group;
-        if (g && g.parent === scene) {
-          scene.remove(g);
-          stackedLineCount--;
-          break;
-        }
-      }
-      if (stackedLineCount <= max) break;
-    }
-  }
-
-  function positionGroupForStack(group) {
-    if (!cfg.keepPreviousLinesVisible || !cfg.stackLines) {
-      group.position.y = 0;
-      return;
+    while (stackedGroups.length > max) {
+      const oldest = stackedGroups.shift();
+      if (oldest) scene.remove(oldest);
     }
 
-    const gap = Number(cfg.stackLineGap || 0.22);
-    if (cfg.stackAnchor === 'center') {
-      group.position.y = 0 - (stackedLineCount * gap);
-      return;
-    }
-    group.position.y = 0 - (stackedLineCount * gap);
+    stackedLineCount = stackedGroups.length;
+    reflowStackedGroups();
   }
 
   function runSequence(lineIdx = 0) {
@@ -1356,9 +1401,9 @@
 
     const startLine = () => {
       if (cfg.keepPreviousLinesVisible && cfg.stackLines) {
-        positionGroupForStack(current.group);
-        stackedLineCount++;
+        stackedGroups.push(current.group);
         enforceStackLimit();
+        reflowStackedGroups();
       } else {
         current.group.position.y = 0;
       }
@@ -1367,7 +1412,7 @@
 
       const hasTiming = (typeof current.startTime === 'number' && typeof current.endTime === 'number');
       const done = () => {
-        if (!cfg.keepPreviousLinesVisible) scene.remove(current.group);
+        if (!cfg.keepPreviousLinesVisible || !cfg.stackLines) scene.remove(current.group);
         runSequence(lineIdx + 1);
       };
 

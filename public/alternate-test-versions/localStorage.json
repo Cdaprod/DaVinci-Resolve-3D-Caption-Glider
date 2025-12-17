@@ -14,6 +14,7 @@
       "revealRise": 0.045,
       "revealZ": 0.05,
       "revealOvershoot": 0.02,
+      "revealStyle": "slide-up",
       "keepPreviousLinesVisible": false,
       "stackLines": true,
       "stackLineGap": 0.22,

@@ -17,3 +17,4 @@ This file applies to the entire repository.
 - Active word highlighting should remain smooth and readable: keep the per-frame glow/scale smoothing (with softer neighbor glow) so semantic emphasis remains apparent even after the reveal completes.
 - When keep-previous-lines stacking is enabled, use measured line heights to avoid overlap; if stacking is off, completed lines should clear to keep the frame legible. Update README/UI hints when altering this flow.
 - Emphasis visibility relies on semantic bold plus the glow/scale defaults; adjust materials/emphasis values and documentation together so bold words remain visually distinct.
+- Reveal styles are enumerated (slide-up, grow-up, bloom, word-fade, char-fade, typewriter); keep the dropdown, defaults, and seed values in sync, and normalize legacy `rise` to `slide-up` for backward compatibility.

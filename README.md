@@ -155,7 +155,7 @@ const cfg = {
   revealRise: 0.045,
   revealZ: 0.05,
   revealOvershoot: 0.02,
-  revealStyle: 'rise', // 'rise' or 'grow-up'
+  revealStyle: 'slide-up', // slide-up (default), grow-up, bloom, word-fade, char-fade, typewriter
 
   emphasisProfile: 'documentary', // documentary (stacked emphasis) or minimal
 
@@ -181,7 +181,7 @@ All UI-configurable values now persist to `localStorage` under the `captioner_st
 with the demo, update `public/localStorage.json` (and optionally keep `public/alternate-test-versions/localStorage.json` in sync);
 the app seeds `localStorage` from those files when no prior state exists.
 
-You can switch fonts via presets (Akira Expanded, Impact, Inter Black via CDN, Apple Garamond Regular/Italic, or a custom URL) and swap reveal styles between the default rise and the grow-from-below effect directly in the UI.
+You can switch fonts via presets (Akira Expanded, Impact, Inter Black via CDN, Apple Garamond Regular/Italic, or a custom URL) and choose a reveal style in the UI: **slide-up** (default), **grow-up**, **bloom**, **word fade**, **character fade**, or **typewriter** (left-anchored sweep).
 
 Use **bold** markers in your transcript or fallback lines to flag semantic emphasis. The default “Documentary” emphasis profile stacks semantic emphasis (scale 1.08 with a 260ms settle and +120ms hold) with terminal-word cadence (+0.45× word-width drift and +300ms hold) so bold last words land with a gentle overhang. Active words now receive a per-frame glow/scale lift (with softened neighbor glow) so emphasis stays visible as the camera glides through each line. A “Minimal” profile is also available for a lighter touch.
 

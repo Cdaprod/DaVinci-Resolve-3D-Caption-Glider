@@ -188,6 +188,7 @@ function testSeedFilesAreCleanObjects() {
     assert.strictEqual(typeof data.captioner_state_v1, 'object', `${seedPath} captioner_state_v1 should be an object payload`);
     assert.strictEqual(typeof data.captioner_state_v1.cfg, 'object', `${seedPath} cfg should be an object`);
     assert.strictEqual(typeof data.captioner_state_v1.wpl, 'number', `${seedPath} wpl should be numeric`);
+    assert.strictEqual(typeof data.captioner_state_v1.cfg.revealStyle, 'string', `${seedPath} revealStyle should be string`);
   }
 }
 

@@ -356,7 +356,7 @@
     revealRise:       0.045,
     revealZ:          0.05,
     revealOvershoot:  0.02,
-    revealStyle:      'rise',
+    revealStyle:      'slide-up',
 
     emphasisProfile:  'documentary',
 
@@ -479,8 +479,12 @@
   ];
 
   const REVEAL_STYLE_OPTIONS = [
-    { id: 'rise', label: 'Pop rise + glow (current default)' },
-    { id: 'grow-up', label: 'Grow from below / behind' }
+    { id: 'slide-up', label: 'Slide up (default)' },
+    { id: 'grow-up', label: 'Grow from below / behind' },
+    { id: 'bloom', label: 'Word bloom (soft scale pop)' },
+    { id: 'word-fade', label: 'Word fade in' },
+    { id: 'char-fade', label: 'Character fade in' },
+    { id: 'typewriter', label: 'Character typewriter sweep' }
   ];
 
   const EMPHASIS_PROFILE_OPTIONS = [
@@ -749,7 +753,11 @@
   function applyPersistedState(payload) {
     if (!payload || typeof payload !== 'object') return;
     const cfgPatch = sanitizePersistedState(DEFAULT_CFG, payload.cfg || payload);
+    if (cfgPatch.revealStyle === 'rise') cfgPatch.revealStyle = 'slide-up';
     Object.assign(cfg, cfgPatch);
+
+    const validRevealIds = new Set(REVEAL_STYLE_OPTIONS.map(o => o.id));
+    if (!validRevealIds.has(cfg.revealStyle)) cfg.revealStyle = 'slide-up';
 
     if (typeof payload.wpl === 'number' && isFinite(payload.wpl)) {
       wplEl.value = String(payload.wpl);
@@ -1073,6 +1081,7 @@
       mesh.userData.revealStart = null;
       mesh.userData.revealed = false;
       mesh.userData.basePos = mesh.position.clone();
+      mesh.userData.wordLength = cleanText.length;
       mesh.userData.emphasis = !!emphasisFlags[i];
       mesh.userData.isLast = (i === parsedWords.length - 1);
       mesh.userData.activeWeight = 0;
@@ -1108,6 +1117,13 @@
   // -------------------------
   // Reveal animation
   // -------------------------
+  function normalizeRevealStyle(style) {
+    const id = String(style || '').trim();
+    if (id === 'rise') return 'slide-up'; // legacy
+    const valid = REVEAL_STYLE_OPTIONS.map(o => o.id);
+    return valid.includes(id) ? id : 'slide-up';
+  }
+
   function startReveal(mesh, now) {
     if (mesh.userData.revealed) return;
 
@@ -1116,31 +1132,70 @@
     mesh.userData.revealStart = now;
     mesh.material.opacity = 0;
 
-    const style = mesh?.userData?.revealStyle || cfg.revealStyle;
-    const rawStart = style === 'grow-up'
-      ? cfg.revealStartScale * 0.98
-      : cfg.revealStartScale;
-    const startScale = Math.max(1, rawStart);
-    const popScale = style === 'grow-up'
-      ? Math.max(startScale, cfg.revealPopScale * 0.96)
-      : cfg.revealPopScale;
-    const rise = style === 'grow-up'
-      ? -Math.abs(cfg.revealRise) * 1.45
-      : cfg.revealRise * 0.75;
-    const depth = style === 'grow-up'
-      ? -Math.abs(cfg.revealZ) * 1.2
-      : cfg.revealZ * 0.55;
+    const style = normalizeRevealStyle(mesh?.userData?.revealStyle || cfg.revealStyle);
+    mesh.userData.revealStyle = style;
 
-    mesh.userData.revealStartScale = startScale;
-    mesh.userData.revealPopScale = Math.max(popScale, startScale);
-    mesh.userData.revealOffsetY = rise;
-    mesh.userData.revealOffsetZ = depth;
+    const baseStart = Math.max(1, cfg.revealStartScale);
+    const basePop = Math.max(baseStart, cfg.revealPopScale);
 
-    mesh.scale.set(1, startScale, startScale);
+    const params = {
+      startScale: baseStart,
+      popScale: basePop,
+      rise: cfg.revealRise * 0.75,
+      depth: cfg.revealZ * 0.55,
+      axisXStart: 1,
+      axisXEnd: 1,
+      opacityFloor: 0.1,
+    };
+
+    if (style === 'grow-up') {
+      params.startScale = Math.max(1, cfg.revealStartScale * 0.98);
+      params.popScale = Math.max(params.startScale, cfg.revealPopScale * 0.96);
+      params.rise = -Math.abs(cfg.revealRise) * 1.45;
+      params.depth = -Math.abs(cfg.revealZ) * 1.2;
+    } else if (style === 'bloom') {
+      params.startScale = Math.max(0.85, cfg.revealStartScale * 0.9);
+      params.popScale = Math.max(params.startScale, cfg.revealPopScale * 1.12);
+      params.rise = cfg.revealRise * 0.25;
+      params.depth = cfg.revealZ * 0.35;
+      params.opacityFloor = 0.12;
+    } else if (style === 'word-fade') {
+      params.startScale = 1;
+      params.popScale = 1;
+      params.rise = 0;
+      params.depth = 0;
+      params.opacityFloor = 0;
+    } else if (style === 'char-fade') {
+      params.startScale = 1;
+      params.popScale = 1.02;
+      params.rise = 0;
+      params.depth = 0;
+      params.axisXStart = 0.92;
+      params.axisXEnd = 1;
+      params.opacityFloor = 0;
+    } else if (style === 'typewriter') {
+      params.startScale = 1;
+      params.popScale = 1;
+      params.rise = cfg.revealRise * 0.15;
+      params.depth = 0;
+      params.axisXStart = 0.08;
+      params.axisXEnd = 1;
+      params.opacityFloor = 0.05;
+    }
+
+    mesh.userData.revealParams = params;
+    mesh.userData.revealStartScale = params.startScale;
+    mesh.userData.revealPopScale = params.popScale;
+    mesh.userData.revealOffsetY = params.rise;
+    mesh.userData.revealOffsetZ = params.depth;
+    mesh.userData.axisXStart = params.axisXStart;
+    mesh.userData.axisXEnd = params.axisXEnd;
+
+    mesh.scale.set(params.axisXStart, params.startScale, params.startScale);
     mesh.position.set(
       mesh.userData.basePos.x,
-      mesh.userData.basePos.y + rise,
-      mesh.userData.basePos.z + depth
+      mesh.userData.basePos.y + params.rise,
+      mesh.userData.basePos.z + params.depth
     );
   }
 
@@ -1153,13 +1208,16 @@
     const t = clamp01(elapsed / cfg.revealMs);
     const profile = getEmphasisProfile();
     const easeIn = smooth01(t);
+    const params = mesh.userData.revealParams || {};
     const opacityEase = easeOutCubic(easeIn);
-    mesh.material.opacity = Math.min(1, 0.1 + opacityEase * 0.95);
 
-    const startScale = mesh.userData.revealStartScale ?? Math.max(1, cfg.revealStartScale);
-    const popScale = mesh.userData.revealPopScale ?? cfg.revealPopScale;
-    const rise = mesh.userData.revealOffsetY ?? 0;
-    const depth = mesh.userData.revealOffsetZ ?? 0;
+    const startScale = params.startScale ?? Math.max(1, cfg.revealStartScale);
+    const popScale = params.popScale ?? cfg.revealPopScale;
+    const rise = params.rise ?? 0;
+    const depth = params.depth ?? 0;
+    const axisXStart = params.axisXStart ?? 1;
+    const axisXEnd = params.axisXEnd ?? 1;
+    const style = mesh.userData.revealStyle || cfg.revealStyle;
 
     const liftEase = easeOutCubic(easeIn);
     const backEase = easeOutBack(easeIn, Math.max(0, cfg.revealOvershoot || 0));
@@ -1173,8 +1231,30 @@
     );
 
     const emScale = emphasisScaleFor(mesh, elapsed, profile);
-    const uni = settleScale * emScale;
-    mesh.scale.set(emScale, uni, uni);
+    let uni = settleScale * emScale;
+    let axisX = axisXEnd;
+    let opacity = Math.min(1, (params.opacityFloor ?? 0.1) + opacityEase * (1 - (params.opacityFloor ?? 0.1)));
+
+    if (style === 'word-fade') {
+      uni = emScale;
+      axisX = 1;
+      opacity = opacityEase;
+    } else if (style === 'char-fade') {
+      const chars = Math.max(1, mesh.userData.wordLength || 1);
+      const charPhase = clamp01(easeIn * chars);
+      axisX = THREE.MathUtils.lerp(axisXStart, axisXEnd, charPhase);
+      opacity = charPhase;
+      uni = emScale;
+    } else if (style === 'typewriter') {
+      const chars = Math.max(1, mesh.userData.wordLength || 1);
+      const charPhase = clamp01(easeIn * chars);
+      axisX = THREE.MathUtils.lerp(axisXStart, axisXEnd, charPhase);
+      opacity = Math.max(params.opacityFloor ?? 0.05, charPhase);
+    }
+
+    mesh.material.opacity = opacity;
+
+    mesh.scale.set(axisX * emScale, uni, uni);
 
     if (t >= 1) {
       mesh.userData.revealStart = null;

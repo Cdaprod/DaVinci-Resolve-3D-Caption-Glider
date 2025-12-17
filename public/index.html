@@ -285,6 +285,7 @@
     <div id="mini">
       Export note: recording uses <code>canvas.captureStream</code> + <code>MediaRecorder</code>.
       Some iOS browsers may block WebM recording.
+      Script tokens: <code>#A/#B/#C</code> switch profiles; <code>[PAUSE=ms]</code> / <code>[HOLD=ms]</code> apply to the next line.
     </div>
   </div>
 </div>
@@ -293,6 +294,7 @@
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/FontLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/TTFLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/geometries/TextGeometry.js"></script>
+<script src="./animation-helpers.js"></script>
 
 <script>
   // -------------------------
@@ -342,6 +344,55 @@
     stackAnchor: 'bottom',
     stackMaxLines: 6
   });
+
+  const DEFAULT_LINE_PROFILE_ID = 'default';
+
+  const LINE_PROFILE_PRESETS = {
+    default: {
+      label: 'Default glide',
+      speedMultiplier: 1,
+      followMult: 1,
+      lookAtMult: 1,
+      lookAheadOffset: 0,
+      cameraDistanceOffset: 0,
+      holdMs: 0,
+      revealStyle: null,
+      endBiasPx: 0,
+    },
+    A: {
+      label: 'Profile A (calm dolly)',
+      speedMultiplier: 0.92,
+      followMult: 0.9,
+      lookAtMult: 0.95,
+      lookAheadOffset: -0.005,
+      cameraDistanceOffset: 0.08,
+      holdMs: 120,
+      revealStyle: 'grow-up',
+      endBiasPx: 0.02,
+    },
+    B: {
+      label: 'Profile B (tight + assertive)',
+      speedMultiplier: 1.05,
+      followMult: 1.1,
+      lookAtMult: 1.05,
+      lookAheadOffset: 0.01,
+      cameraDistanceOffset: -0.05,
+      holdMs: 80,
+      revealStyle: 'rise',
+      endBiasPx: 0.04,
+    },
+    C: {
+      label: 'Profile C (dramatic settle)',
+      speedMultiplier: 0.85,
+      followMult: 0.82,
+      lookAtMult: 0.9,
+      lookAheadOffset: -0.012,
+      cameraDistanceOffset: 0.12,
+      holdMs: 220,
+      revealStyle: 'grow-up',
+      endBiasPx: 0.06,
+    }
+  };
 
   const FONT_PRESETS = [
     {
@@ -656,6 +707,69 @@
     }
     return bias;
   }
+
+  const parseScriptLines = (window.AnimationHelpers && typeof window.AnimationHelpers.parseScriptLines === 'function')
+    ? window.AnimationHelpers.parseScriptLines
+    : function fallbackParse(lines = [], defaultProfileId = DEFAULT_LINE_PROFILE_ID) {
+        const normalize = (token = '') => {
+          const trimmed = String(token || '').trim();
+          if (!trimmed) return DEFAULT_LINE_PROFILE_ID;
+          return trimmed.length === 1 ? trimmed.toUpperCase() : trimmed.toLowerCase();
+        };
+
+        const segments = [];
+        let active = normalize(defaultProfileId);
+        let pendingPause = 0;
+        let pendingHold = 0;
+
+        for (const raw of lines || []) {
+          const line = String(raw ?? '').trim();
+          if (!line) continue;
+
+          let content = line;
+          const directive = content.match(/^#([A-Za-z0-9_-]+)(?:\s+(.+))?$/);
+          if (directive) {
+            active = normalize(directive[1]);
+            content = (directive[2] || '').trim();
+          }
+
+          let pauseMs = 0;
+          let holdMs = 0;
+          content = content.replace(/\[PAUSE\s*=\s*(\d+)\]/gi, (_, ms) => { pauseMs += Number(ms) || 0; return ' '; });
+          content = content.replace(/\[HOLD\s*=\s*(\d+)\]/gi, (_, ms) => { holdMs += Number(ms) || 0; return ' '; });
+
+          const text = content.trim();
+          if (!text) {
+            pendingPause += pauseMs;
+            pendingHold += holdMs;
+            continue;
+          }
+
+          segments.push({
+            profileId: active,
+            text,
+            pauseMs: pendingPause + pauseMs,
+            holdMs: pendingHold + holdMs,
+          });
+
+          pendingPause = 0;
+          pendingHold = 0;
+        }
+
+        return segments;
+      };
+
+  function getLineProfile(profileId = DEFAULT_LINE_PROFILE_ID) {
+    return LINE_PROFILE_PRESETS[profileId] || LINE_PROFILE_PRESETS[DEFAULT_LINE_PROFILE_ID];
+  }
+
+  function estimateSegmentDurationMs(wordCount, punctuationCount, profileSettings) {
+    const pace = Math.max(0.01, profileSettings?.speedMultiplier ?? 1);
+    const wordsPerSec = Math.max(0.1, cfg.wordsPerSecond * pace);
+    const baseMs = wordCount > 0 ? (wordCount / wordsPerSec) * 1000 : 0;
+    const punctuationMs = Math.max(0, (punctuationCount || 0) * 90);
+    return Math.max(300, baseMs + punctuationMs);
+  }
   function render() { renderer.render(scene, camera); }
 
   const fontLoader = new THREE.FontLoader();
@@ -838,7 +952,7 @@
 
     mesh.material.opacity = 0;
 
-    const style = cfg.revealStyle;
+    const style = mesh?.userData?.revealStyle || cfg.revealStyle;
     if (style === 'grow-up') {
       mesh.scale.setScalar(0.55);
       mesh.position.set(
@@ -869,7 +983,7 @@
     mesh.material.opacity = Math.min(1, a * 1.05);
 
     let styleScale = 1;
-    const style = cfg.revealStyle;
+    const style = mesh?.userData?.revealStyle || cfg.revealStyle;
 
     if (style === 'grow-up') {
       const eased = smooth01(t);
@@ -963,7 +1077,9 @@
   function animateLineGlideWithTiming(lineObj, onComplete) {
     const { meshes, centers, widths, words, startTime, endTime, group, emphasisFlags } = lineObj;
     const n = centers.length;
-    const profile = getEmphasisProfile();
+    const emphasisProfile = getEmphasisProfile();
+    const lineProfile = lineObj.profileSettings || getLineProfile(lineObj.profileId);
+    const activeRevealStyle = lineObj.revealStyleOverride || lineProfile?.revealStyle || cfg.revealStyle;
 
     for (const m of meshes) {
       m.visible = false;
@@ -972,6 +1088,7 @@
       m.userData.revealed = false;
       m.scale.setScalar(1);
       m.position.copy(m.userData.basePos);
+      m.userData.revealStyle = activeRevealStyle;
     }
 
     if (n === 0) { onComplete?.(); return; }
@@ -994,8 +1111,10 @@
     let lookAtX = camera.position.x;
     let lookAtY = camera.position.y;
 
-    const followLambda = cfg.followLambda;
-    const lookAheadU   = cfg.curveLookAheadU;
+    const followLambda = cfg.followLambda * (lineProfile?.followMult ?? 1);
+    const lookAheadU   = Math.max(0, cfg.curveLookAheadU + (lineProfile?.lookAheadOffset ?? 0));
+    const lookLambda   = cfg.lookAtLambda * (lineProfile?.lookAtMult ?? 1);
+    const camDistance  = cfg.cameraDistance + (lineProfile?.cameraDistanceOffset ?? 0);
     let lastNow = performance.now();
 
     function frame(now) {
@@ -1018,7 +1137,7 @@
       const activeIdx = computeActiveWordIndex(Array.isArray(words) && words.length === meshes.length ? words : null, currentTime, uRaw, n);
       const isEmphasis = activeIdx >= 0 && Array.isArray(emphasisFlags) && emphasisFlags[activeIdx];
       const isTerminal = activeIdx === (n - 1);
-      const bias = computeEmphasisBias(profile, activeIdx, emphasisFlags, widths, uRaw);
+      const bias = computeEmphasisBias(emphasisProfile, activeIdx, emphasisFlags, widths, uRaw) + (lineProfile?.endBiasPx ?? 0);
 
       let target = curve.getPointAt(t2);
       target = shapeTargetWithBounds(target, uRaw, c2, widths, bounds, bias);
@@ -1035,16 +1154,16 @@
 
       for (const m of meshes) tickReveal(m, now);
 
-      const followScale = (isEmphasis ? (profile?.emphasisFollowMult ?? 1) : 1) * (isTerminal ? (profile?.terminalFollowMult ?? 1) : 1);
-      const lookScale = (isEmphasis ? (profile?.emphasisLookAtMult ?? 1) : 1) * (isTerminal ? (profile?.terminalLookAtMult ?? 1) : 1);
+      const followScale = (isEmphasis ? (emphasisProfile?.emphasisFollowMult ?? 1) : 1) * (isTerminal ? (emphasisProfile?.terminalFollowMult ?? 1) : 1);
+      const lookScale = (isEmphasis ? (emphasisProfile?.emphasisLookAtMult ?? 1) : 1) * (isTerminal ? (emphasisProfile?.terminalLookAtMult ?? 1) : 1);
 
       camX = damp(camX, target.x, Math.max(0.1, followLambda * followScale), dt);
       camY = damp(camY, target.y, Math.max(0.1, followLambda * followScale), dt);
 
-      lookAtX = damp(lookAtX, target.x, Math.max(0.1, cfg.lookAtLambda * lookScale), dt);
-      lookAtY = damp(lookAtY, target.y, Math.max(0.1, cfg.lookAtLambda * lookScale), dt);
+      lookAtX = damp(lookAtX, target.x, Math.max(0.1, lookLambda * lookScale), dt);
+      lookAtY = damp(lookAtY, target.y, Math.max(0.1, lookLambda * lookScale), dt);
 
-      camera.position.set(camX, camY, cfg.cameraDistance);
+      camera.position.set(camX, camY, camDistance);
       camera.lookAt(lookAtX, lookAtY, target.z);
 
       renderer.render(scene, camera);
@@ -1058,8 +1177,9 @@
           m.scale.setScalar(1);
           m.position.copy(m.userData.basePos);
         }
-        const terminalHold = (profile?.terminalHoldMs ?? 0) + ((Array.isArray(emphasisFlags) && emphasisFlags[n - 1]) ? (profile?.emphasisHoldMs ?? 0) : 0);
-        const hold = Math.max(0, cfg.lineHoldMsAfterComplete + terminalHold);
+        const terminalHold = (emphasisProfile?.terminalHoldMs ?? 0) + ((Array.isArray(emphasisFlags) && emphasisFlags[n - 1]) ? (emphasisProfile?.emphasisHoldMs ?? 0) : 0);
+        const profileHold = Math.max(0, (lineProfile?.holdMs ?? 0) + (lineObj?.holdMs ?? 0));
+        const hold = Math.max(0, cfg.lineHoldMsAfterComplete + terminalHold + profileHold);
         setTimeout(() => onComplete?.(), hold);
       }
     }
@@ -1073,7 +1193,9 @@
   function animateLineGlideFallback(lineObj, onComplete){
     const { meshes, centers, widths, group, emphasisFlags } = lineObj;
     const n = centers.length;
-    const profile = getEmphasisProfile();
+    const emphasisProfile = getEmphasisProfile();
+    const lineProfile = lineObj.profileSettings || getLineProfile(lineObj.profileId);
+    const activeRevealStyle = lineObj.revealStyleOverride || lineProfile?.revealStyle || cfg.revealStyle;
 
     for (const m of meshes) {
       m.visible = false;
@@ -1082,6 +1204,7 @@
       m.userData.revealed = false;
       m.scale.setScalar(1);
       m.position.copy(m.userData.basePos);
+      m.userData.revealStyle = activeRevealStyle;
     }
 
     if (n === 0) { onComplete?.(); return; }
@@ -1095,7 +1218,9 @@
     const lengths = curve.getLengths(ARC_SAMPLES);
     const totalLen = lengths[lengths.length - 1];
 
-    const totalMs = n * (1000 / cfg.wordsPerSecond);
+    const profileDurationMs = typeof lineObj.durationMs === 'number' ? lineObj.durationMs : null;
+    const wordsPerSec = Math.max(0.1, cfg.wordsPerSecond * (lineProfile?.speedMultiplier ?? 1));
+    const totalMs = profileDurationMs ?? (n * (1000 / wordsPerSec));
     const start = performance.now();
 
     let camX = camera.position.x;
@@ -1104,8 +1229,10 @@
     let lookAtY = camera.position.y;
 
     const revealWordLead = cfg.revealWordLead;
-    const followLambda   = cfg.followLambda;
-    const lookAheadU     = cfg.curveLookAheadU;
+    const followLambda   = cfg.followLambda * (lineProfile?.followMult ?? 1);
+    const lookAheadU     = Math.max(0, cfg.curveLookAheadU + (lineProfile?.lookAheadOffset ?? 0));
+    const lookLambda     = cfg.lookAtLambda * (lineProfile?.lookAtMult ?? 1);
+    const camDistance    = cfg.cameraDistance + (lineProfile?.cameraDistanceOffset ?? 0);
     let lastNow = performance.now();
 
     function frame(now){
@@ -1127,7 +1254,7 @@
       const activeIdx = computeActiveWordIndex(null, 0, uRaw, n);
       const isEmphasis = activeIdx >= 0 && Array.isArray(emphasisFlags) && emphasisFlags[activeIdx];
       const isTerminal = activeIdx === (n - 1);
-      const bias = computeEmphasisBias(profile, activeIdx, emphasisFlags, widths, uRaw);
+      const bias = computeEmphasisBias(emphasisProfile, activeIdx, emphasisFlags, widths, uRaw) + (lineProfile?.endBiasPx ?? 0);
 
       let target = curve.getPointAt(t2);
       target = shapeTargetWithBounds(target, uRaw, c2, widths, bounds, bias);
@@ -1138,16 +1265,16 @@
 
       for (const m of meshes) tickReveal(m, now);
 
-      const followScale = (isEmphasis ? (profile?.emphasisFollowMult ?? 1) : 1) * (isTerminal ? (profile?.terminalFollowMult ?? 1) : 1);
-      const lookScale = (isEmphasis ? (profile?.emphasisLookAtMult ?? 1) : 1) * (isTerminal ? (profile?.terminalLookAtMult ?? 1) : 1);
+      const followScale = (isEmphasis ? (emphasisProfile?.emphasisFollowMult ?? 1) : 1) * (isTerminal ? (emphasisProfile?.terminalFollowMult ?? 1) : 1);
+      const lookScale = (isEmphasis ? (emphasisProfile?.emphasisLookAtMult ?? 1) : 1) * (isTerminal ? (emphasisProfile?.terminalLookAtMult ?? 1) : 1);
 
       camX = damp(camX, target.x, Math.max(0.1, followLambda * followScale), dt);
       camY = damp(camY, target.y, Math.max(0.1, followLambda * followScale), dt);
 
-      lookAtX = damp(lookAtX, target.x, Math.max(0.1, cfg.lookAtLambda * lookScale), dt);
-      lookAtY = damp(lookAtY, target.y, Math.max(0.1, cfg.lookAtLambda * lookScale), dt);
+      lookAtX = damp(lookAtX, target.x, Math.max(0.1, lookLambda * lookScale), dt);
+      lookAtY = damp(lookAtY, target.y, Math.max(0.1, lookLambda * lookScale), dt);
 
-      camera.position.set(camX, camY, cfg.cameraDistance);
+      camera.position.set(camX, camY, camDistance);
       camera.lookAt(lookAtX, lookAtY, target.z);
 
       renderer.render(scene, camera);
@@ -1161,8 +1288,9 @@
           m.scale.setScalar(1);
           m.position.copy(m.userData.basePos);
         }
-        const terminalHold = (profile?.terminalHoldMs ?? 0) + ((Array.isArray(emphasisFlags) && emphasisFlags[n - 1]) ? (profile?.emphasisHoldMs ?? 0) : 0);
-        const hold = Math.max(0, cfg.lineHoldMsAfterComplete + terminalHold);
+        const terminalHold = (emphasisProfile?.terminalHoldMs ?? 0) + ((Array.isArray(emphasisFlags) && emphasisFlags[n - 1]) ? (emphasisProfile?.emphasisHoldMs ?? 0) : 0);
+        const profileHold = Math.max(0, (lineProfile?.holdMs ?? 0) + (lineObj?.holdMs ?? 0));
+        const hold = Math.max(0, cfg.lineHoldMsAfterComplete + terminalHold + profileHold);
         setTimeout(() => onComplete?.(), hold);
       }
     }
@@ -1226,24 +1354,30 @@
 
     const current = lineObjs[lineIdx];
 
-    if (cfg.keepPreviousLinesVisible && cfg.stackLines) {
-      positionGroupForStack(current.group);
-      stackedLineCount++;
-      enforceStackLimit();
-    } else {
-      current.group.position.y = 0;
-    }
+    const startLine = () => {
+      if (cfg.keepPreviousLinesVisible && cfg.stackLines) {
+        positionGroupForStack(current.group);
+        stackedLineCount++;
+        enforceStackLimit();
+      } else {
+        current.group.position.y = 0;
+      }
 
-    scene.add(current.group);
+      scene.add(current.group);
 
-    const hasTiming = (typeof current.startTime === 'number' && typeof current.endTime === 'number');
-    const done = () => {
-      if (!cfg.keepPreviousLinesVisible) scene.remove(current.group);
-      runSequence(lineIdx + 1);
+      const hasTiming = (typeof current.startTime === 'number' && typeof current.endTime === 'number');
+      const done = () => {
+        if (!cfg.keepPreviousLinesVisible) scene.remove(current.group);
+        runSequence(lineIdx + 1);
+      };
+
+      if (hasTiming) animateLineGlideWithTiming(current, done);
+      else animateLineGlideFallback(current, done);
     };
 
-    if (hasTiming) animateLineGlideWithTiming(current, done);
-    else animateLineGlideFallback(current, done);
+    const pauseMs = Math.max(0, current.pauseMs || 0);
+    if (pauseMs > 0) setTimeout(startLine, pauseMs);
+    else startLine();
   }
 
   function replay() {
@@ -1268,6 +1402,15 @@
       obj.startTime = ln.startTime;
       obj.endTime = ln.endTime;
       obj.words = obj.normalizedWords || ln.words;
+      obj.profileId = DEFAULT_LINE_PROFILE_ID;
+      obj.profileSettings = getLineProfile(obj.profileId);
+      obj.pauseMs = 0;
+      obj.holdMs = 0;
+      obj.revealStyleOverride = obj.profileSettings?.revealStyle || null;
+      const durationMs = (typeof obj.startTime === 'number' && typeof obj.endTime === 'number')
+        ? Math.max(0, (obj.endTime - obj.startTime) * 1000)
+        : 0;
+      obj.durationMs = Math.max(50, durationMs);
       lineObjs.push(obj);
     }
   }
@@ -1275,7 +1418,21 @@
   function buildFromPlainLines(font, lines) {
     clearAllLinesFromScene();
     lineObjs = [];
-    for (const l of lines) lineObjs.push(buildLine(font, l));
+    const segments = parseScriptLines(lines, DEFAULT_LINE_PROFILE_ID);
+    for (const seg of segments) {
+      const obj = buildLine(font, seg.text);
+      obj.profileId = seg.profileId || DEFAULT_LINE_PROFILE_ID;
+      obj.profileSettings = getLineProfile(obj.profileId);
+      obj.pauseMs = Math.max(0, seg.pauseMs || 0);
+      obj.holdMs = Math.max(0, seg.holdMs || 0);
+      obj.revealStyleOverride = obj.profileSettings?.revealStyle || null;
+
+      const punctuationCount = (seg.text.match(/[.,;:!?…—-]/g) || []).length;
+      const wordCount = obj.normalizedWords?.length ?? 0;
+      obj.durationMs = estimateSegmentDurationMs(wordCount, punctuationCount, obj.profileSettings);
+
+      lineObjs.push(obj);
+    }
   }
 
   // -------------------------

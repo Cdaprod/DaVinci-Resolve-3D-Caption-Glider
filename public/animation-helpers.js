@@ -49,6 +49,68 @@
     return e * maxBias;
   }
 
+  function stripControlTokens(text = '') {
+    let pauseMs = 0;
+    let holdMs = 0;
+    let out = String(text || '');
+
+    out = out.replace(/\[PAUSE\s*=\s*(\d+)\]/gi, (_, ms) => {
+      pauseMs += Number(ms) || 0;
+      return ' ';
+    });
+
+    out = out.replace(/\[HOLD\s*=\s*(\d+)\]/gi, (_, ms) => {
+      holdMs += Number(ms) || 0;
+      return ' ';
+    });
+
+    return { text: out.trim(), pauseMs, holdMs };
+  }
+
+  function normalizeProfileToken(token = '') {
+    const trimmed = String(token || '').trim();
+    if (!trimmed) return 'default';
+    return trimmed.length === 1 ? trimmed.toUpperCase() : trimmed.toLowerCase();
+  }
+
+  function parseScriptLines(rawLines = [], defaultProfileId = 'default') {
+    const segments = [];
+    let activeProfile = normalizeProfileToken(defaultProfileId);
+    let pendingPause = 0;
+    let pendingHold = 0;
+
+    for (const raw of rawLines || []) {
+      const line = String(raw ?? '').trim();
+      if (!line) continue;
+
+      let content = line;
+      const directive = content.match(/^#([A-Za-z0-9_-]+)(?:\s+(.+))?$/);
+      if (directive) {
+        activeProfile = normalizeProfileToken(directive[1]);
+        content = (directive[2] || '').trim();
+      }
+
+      const { text, pauseMs, holdMs } = stripControlTokens(content);
+      if (!text) {
+        pendingPause += pauseMs;
+        pendingHold += holdMs;
+        continue;
+      }
+
+      segments.push({
+        profileId: activeProfile,
+        text,
+        pauseMs: pendingPause + pauseMs,
+        holdMs: pendingHold + holdMs,
+      });
+
+      pendingPause = 0;
+      pendingHold = 0;
+    }
+
+    return segments;
+  }
+
   function extractEmphasisToken(wordText = '') {
     const isEmphasized = /\*\*(.+?)\*\*/.test(wordText);
     const cleanText = String(wordText).replace(/\*\*/g, '') || String(wordText || '').trim();
@@ -63,5 +125,6 @@
     computeCenterBounds,
     endBias,
     extractEmphasisToken,
+    parseScriptLines,
   };
 });

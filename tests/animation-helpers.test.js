@@ -3,7 +3,7 @@
 // Example: `node tests/animation-helpers.test.js`
 
 const assert = require('assert');
-const { clamp01, computeCenterBounds, endBias, extractEmphasisToken } = require('../public/animation-helpers');
+const { clamp01, computeCenterBounds, endBias, extractEmphasisToken, parseScriptLines } = require('../public/animation-helpers');
 
 function testClamp01() {
   assert.strictEqual(clamp01(-1), 0);
@@ -34,11 +34,46 @@ function testExtractEmphasisToken() {
   assert.strictEqual(plain.isEmphasized, false);
 }
 
+function testParseScriptLines() {
+  const lines = [
+    'Opening line',
+    '#B Second line [PAUSE=120]',
+    '[HOLD=200]',
+    '#C Third line **bold** word',
+    '',
+  ];
+
+  const segments = parseScriptLines(lines, 'default');
+  assert.strictEqual(segments.length, 3);
+
+  assert.deepStrictEqual(segments[0], {
+    profileId: 'default',
+    text: 'Opening line',
+    pauseMs: 0,
+    holdMs: 0,
+  });
+
+  assert.deepStrictEqual(segments[1], {
+    profileId: 'B',
+    text: 'Second line',
+    pauseMs: 120,
+    holdMs: 0,
+  });
+
+  assert.deepStrictEqual(segments[2], {
+    profileId: 'C',
+    text: 'Third line **bold** word',
+    pauseMs: 0,
+    holdMs: 200,
+  });
+}
+
 function run() {
   testClamp01();
   testComputeCenterBounds();
   testEndBias();
   testExtractEmphasisToken();
+  testParseScriptLines();
   console.log('animation-helpers: all tests passed');
 }
 

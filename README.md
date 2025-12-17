@@ -179,6 +179,24 @@ You can switch fonts via presets (Akira Expanded, Impact, Inter Black via CDN, A
 
 Use **bold** markers in your transcript or fallback lines to flag semantic emphasis. The default “Documentary” emphasis profile stacks semantic emphasis (scale 1.08 with a 260ms settle and +120ms hold) with terminal-word cadence (+0.45× word-width drift and +300ms hold) so bold last words land with a gentle overhang. A “Minimal” profile is also available for a lighter touch.
 
+### Profile scripting with `#A/#B/#C` (default-first)
+
+You start in the default profile automatically—no leading token required. Add a directive-only line to switch moods, or prefix a line to switch and render on the same row:
+
+```text
+Opening line in default profile
+#A Calm gliding line (Profile A)
+[PAUSE=200]
+#B Assertive pacing kicks in here
+[HOLD=300]
+#C
+Dramatic settle to close the beat (Profile C)
+```
+
+- `#A`, `#B`, `#C` toggle per-line camera/reveal pacing until the next switch.
+- `[PAUSE=ms]` delays the next content line; `[HOLD=ms]` extends its post-line hold. Directive-only lines with these tokens carry the pause/hold forward.
+- Profiles adjust follow tightness, look-ahead, camera distance, overhang bias, reveal style, and pacing speed while stacking with the existing semantic/terminal emphasis rules.
+
 ## 📁 Project Structure
 
 ```

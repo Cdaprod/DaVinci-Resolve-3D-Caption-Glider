@@ -3,6 +3,8 @@
 // Example: `node tests/animation-helpers.test.js`
 
 const assert = require('assert');
+const fs = require('fs');
+const path = require('path');
 const { clamp01, computeCenterBounds, endBias, extractEmphasisToken, parseScriptLines, stripControlTokens, normalizeProfileToken, visibleHalfWidth, requiredDistanceForSpan, sanitizePersistedState, normalizePersistedPayload } = require('../public/animation-helpers');
 
 function testClamp01() {
@@ -174,6 +176,21 @@ function testNormalizePersistedPayload() {
   assert.strictEqual(normalizePersistedPayload(5), null);
 }
 
+function testSeedFilesAreCleanObjects() {
+  const seeds = [
+    path.join(__dirname, '..', 'public', 'localStorage.json'),
+    path.join(__dirname, '..', 'public', 'alternate-test-versions', 'localStorage.json'),
+  ];
+
+  for (const seedPath of seeds) {
+    if (!fs.existsSync(seedPath)) continue;
+    const data = JSON.parse(fs.readFileSync(seedPath, 'utf8'));
+    assert.strictEqual(typeof data.captioner_state_v1, 'object', `${seedPath} captioner_state_v1 should be an object payload`);
+    assert.strictEqual(typeof data.captioner_state_v1.cfg, 'object', `${seedPath} cfg should be an object`);
+    assert.strictEqual(typeof data.captioner_state_v1.wpl, 'number', `${seedPath} wpl should be numeric`);
+  }
+}
+
 function run() {
   testClamp01();
   testComputeCenterBounds();
@@ -187,6 +204,7 @@ function run() {
   testRequiredDistanceForSpan();
   testSanitizePersistedState();
   testNormalizePersistedPayload();
+  testSeedFilesAreCleanObjects();
   console.log('animation-helpers: all tests passed');
 }
 

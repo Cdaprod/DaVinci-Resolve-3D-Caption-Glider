@@ -187,7 +187,7 @@ Use **bold** markers in your transcript or fallback lines to flag semantic empha
 
 When you enable `keepPreviousLinesVisible`, keep `stackLines` on to preserve legibility; stacked captions reflow using their measured heights and the configured gap so lines don’t overlap. If you disable stacking, completed lines clear automatically to keep the frame clean. Bold words render with a brighter glow on top of the emphasis scaling so semantic emphasis is visible even with the white text palette.
 
-Camera distance acts as a baseline: the renderer automatically expands the distance (respecting your FOV/aspect) when wide lines or highlighted words would otherwise fall outside the viewport, keeping the active word plus its neighbors framed in both portrait and landscape orientations.
+Camera distance acts as a baseline: the renderer automatically expands the distance (respecting your FOV/aspect) when wide lines or highlighted words would otherwise fall outside the viewport, keeping the active word plus its neighbors framed in both portrait and landscape orientations. The end-overhang blend ensures the camera finishes to the right of the last word—during the final U-blend window it clamps toward `maxX + endOverhangPx + endOverhangFactor × lastWidth` so terminal words never re-center.
 
 ### Profile scripting with `#A/#B/#C` (default-first)
 

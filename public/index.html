@@ -1247,11 +1247,24 @@
     if (!isFinite(minX) || !isFinite(maxX)) return target;
 
     const lastW = widths?.[widths.length - 1] ?? 0;
-    const bias = endBias(u, cfg.endOverhangPx + (lastW * cfg.endOverhangFactor)) + (extraBias || 0);
+    const baseBias = Math.max(0, cfg.endOverhangPx + (lastW * cfg.endOverhangFactor));
+    const smoothBias = endBias(u, baseBias) + (extraBias || 0);
 
     const out = target.clone();
     const lead = Math.max(0, cfg.trackLeadPx);
-    out.x = Math.min(maxX + bias, Math.max(minX - lead, target.x + bias));
+    const biasedX = Math.max(minX - lead, target.x + smoothBias);
+    const clampedX = Math.min(maxX + baseBias, biasedX);
+
+    const blendWindow = Math.max(0.01, cfg.endOverhangBlendU || 0.1);
+    const blendStart = Math.max(0, 1 - blendWindow);
+    let terminalGuard = -Infinity;
+    if (u >= blendStart) {
+      const tNorm = clamp01((u - blendStart) / blendWindow);
+      const eased = smooth01(tNorm);
+      terminalGuard = maxX + baseBias * eased;
+    }
+
+    out.x = Math.max(clampedX, terminalGuard);
     return out;
   }
 

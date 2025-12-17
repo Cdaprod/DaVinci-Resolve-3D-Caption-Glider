@@ -13,6 +13,7 @@ This file applies to the entire repository.
 - Demo content should exercise the default-first script language (`#A/#B/#C`, `#default`, pauses/holds, and bold emphasis) so cinematic profiles stay verifiable in preview builds; keep `public/demo-lines.txt` aligned with the latest profile intent.
 - Keep the UI responsive for portrait/landscape testing; updates to `public/index.html` should preserve the mobile-friendly width variable and collapsed transforms that avoid page scrolling.
 - Camera framing should keep the active/neighboring words visible: the dynamic FOV/distance framing logic in `public/index.html` must be preserved or improved so highlighted words never drift outside the viewport when spawned.
+- Terminal framing must finish with a right-of-center overhang: preserve the end-overhang blend so the camera clamps toward `maxX + endOverhangPx + endOverhangFactor × lastWidth` instead of re-centering on the final word.
 - Active word highlighting should remain smooth and readable: keep the per-frame glow/scale smoothing (with softer neighbor glow) so semantic emphasis remains apparent even after the reveal completes.
 - When keep-previous-lines stacking is enabled, use measured line heights to avoid overlap; if stacking is off, completed lines should clear to keep the frame legible. Update README/UI hints when altering this flow.
 - Emphasis visibility relies on semantic bold plus the glow/scale defaults; adjust materials/emphasis values and documentation together so bold words remain visually distinct.

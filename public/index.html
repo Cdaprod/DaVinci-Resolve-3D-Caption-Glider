@@ -351,11 +351,11 @@
     spaceMultiplier: 1.82,
 
     revealMs:         240,
-    revealStartScale: 0.95,
-    revealPopScale:   1.12,
+    revealStartScale: 1.04,
+    revealPopScale:   1.07,
     revealRise:       0.045,
     revealZ:          0.05,
-    revealOvershoot:  0.04,
+    revealOvershoot:  0.02,
     revealStyle:      'rise',
 
     emphasisProfile:  'documentary',
@@ -1105,9 +1105,13 @@
     mesh.material.opacity = 0;
 
     const style = mesh?.userData?.revealStyle || cfg.revealStyle;
-    const startScale = style === 'grow-up'
-      ? cfg.revealStartScale * 0.9
+    const rawStart = style === 'grow-up'
+      ? cfg.revealStartScale * 0.98
       : cfg.revealStartScale;
+    const startScale = Math.max(1, rawStart);
+    const popScale = style === 'grow-up'
+      ? Math.max(startScale, cfg.revealPopScale * 0.96)
+      : cfg.revealPopScale;
     const rise = style === 'grow-up'
       ? -Math.abs(cfg.revealRise) * 1.45
       : cfg.revealRise * 0.75;
@@ -1116,10 +1120,11 @@
       : cfg.revealZ * 0.55;
 
     mesh.userData.revealStartScale = startScale;
+    mesh.userData.revealPopScale = Math.max(popScale, startScale);
     mesh.userData.revealOffsetY = rise;
     mesh.userData.revealOffsetZ = depth;
 
-    mesh.scale.setScalar(startScale);
+    mesh.scale.set(1, startScale, startScale);
     mesh.position.set(
       mesh.userData.basePos.x,
       mesh.userData.basePos.y + rise,
@@ -1139,13 +1144,14 @@
     const opacityEase = easeOutCubic(easeIn);
     mesh.material.opacity = Math.min(1, 0.1 + opacityEase * 0.95);
 
-    const startScale = mesh.userData.revealStartScale ?? cfg.revealStartScale;
+    const startScale = mesh.userData.revealStartScale ?? Math.max(1, cfg.revealStartScale);
+    const popScale = mesh.userData.revealPopScale ?? cfg.revealPopScale;
     const rise = mesh.userData.revealOffsetY ?? 0;
     const depth = mesh.userData.revealOffsetZ ?? 0;
 
     const liftEase = easeOutCubic(easeIn);
     const backEase = easeOutBack(easeIn, Math.max(0, cfg.revealOvershoot || 0));
-    const styleScale = THREE.MathUtils.lerp(startScale, cfg.revealPopScale, backEase);
+    const styleScale = THREE.MathUtils.lerp(startScale, Math.max(startScale, popScale), backEase);
     const settleScale = THREE.MathUtils.lerp(styleScale, 1, liftEase);
 
     mesh.position.set(
@@ -1155,7 +1161,8 @@
     );
 
     const emScale = emphasisScaleFor(mesh, elapsed, profile);
-    mesh.scale.setScalar(settleScale * emScale);
+    const uni = settleScale * emScale;
+    mesh.scale.set(emScale, uni, uni);
 
     if (t >= 1) {
       mesh.userData.revealStart = null;

@@ -150,11 +150,11 @@ const cfg = {
 
   // Reveal animation
   revealMs: 240,
-  revealStartScale: 0.95,
-  revealPopScale: 1.12,
+  revealStartScale: 1.04,
+  revealPopScale: 1.07,
   revealRise: 0.045,
   revealZ: 0.05,
-  revealOvershoot: 0.04,
+  revealOvershoot: 0.02,
   revealStyle: 'rise', // 'rise' or 'grow-up'
 
   emphasisProfile: 'documentary', // documentary (stacked emphasis) or minimal

@@ -178,8 +178,8 @@ const cfg = {
 ```
 
 All UI-configurable values now persist to `localStorage` under the `captioner_state_v1` key. If you want to ship tuned defaults
-with the demo, update `public/alternate-test-versions/localStorage.json`; the app seeds `localStorage` from that file when no
-prior state exists.
+with the demo, update `public/localStorage.json` (and optionally keep `public/alternate-test-versions/localStorage.json` in sync);
+the app seeds `localStorage` from those files when no prior state exists.
 
 You can switch fonts via presets (Akira Expanded, Impact, Inter Black via CDN, Apple Garamond Regular/Italic, or a custom URL) and swap reveal styles between the default rise and the grow-from-below effect directly in the UI.
 

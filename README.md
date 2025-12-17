@@ -78,6 +78,14 @@ python main.py
 
 Navigate to `http://localhost:8080` in your web browser.
 
+### 7. Testing helpers
+
+Run the lightweight helper checks to confirm math helpers and clamping logic behave as expected:
+
+```bash
+node tests/animation-helpers.test.js
+```
+
 ## 🎮 Usage
 
 ### Basic Workflow
@@ -92,6 +100,7 @@ Navigate to `http://localhost:8080` in your web browser.
 
 - Edit `cfg` object in HTML for styling
 - Adjust animation speed, colors, reveal timing
+- Swap fonts using the new preset dropdown (Akira Expanded, Impact, Inter Black via CDN, Apple Garamond, or your own URL) and pick reveal styles (pop rise vs. grow-up)
 
 1. **Export to Timeline**
 
@@ -113,33 +122,58 @@ The system will fall back to this file automatically.
 
 ## ⚙️ Configuration
 
-Edit the `cfg` object in `public/index.html` to customize:
+Edit the `cfg` object in `public/index.html` (or use the built-in configuration drawer) to customize. Defaults are tuned for the cinematic long-line glide:
 
 ```javascript
 const cfg = {
+  // Sources
+  linesUrl: './demo-lines.txt',
+
+  // Fonts
+  fontId: 'helvetiker',
+  fontUrl: 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/fonts/helvetiker_regular.typeface.json',
+  fontFormat: 'typeface', // typeface or ttf
+
   // Text appearance
-  textSize: 0.15,        // Size of 3D text
-  textDepth: 0.03,       // Depth extrusion
-  color: 0x00ccff,       // Text color (hex)
-  
+  textSize: 0.10,
+  textDepth: 0.001,
+  color: 0xffffff,
+  cameraDistance: 3.5,
+
   // Animation timing
-  wordsPerSecond: 3.0,   // Speed of glide
-  followLambda: 34,      // Camera follow smoothness
-  revealWordLead: 0.70,  // How early words appear
-  
+  wordsPerSecond: 2.5,
+  curveLookAheadU: 0.055,
+  followLambda: 19,
+  lookAtLambda: 12,
+  revealWordLead: 1.15,
+
   // Reveal animation
-  revealMs: 240,         // Fade-in duration
-  revealPopScale: 1.28,  // Pop scale multiplier
-  revealRise: 0.06,      // Upward rise amount
-  
-  // Spacing
-  spaceMultiplier: 1.55, // Space between words
-  lineGap: 0.50,         // Gap between lines
-  
-  // Camera
-  cameraDistance: 2.8,   // Distance from text
+  revealMs: 220,
+  revealPopScale: 1.22,
+  revealRise: 0.05,
+  revealZ: 0.06,
+  revealOvershoot: 0.08,
+  revealStyle: 'rise', // 'rise' or 'grow-up'
+
+  // Spacing & stacking
+  spaceMultiplier: 1.55,
+  keepPreviousLinesVisible: false,
+  lineHoldMsAfterComplete: 620,
+  stackLines: true,
+  stackLineGap: 0.22,
+  stackAnchor: 'bottom', // natural downward stacking
+  stackMaxLines: 6,
+
+  // Camera end bias
+  endOverhangFactor: 0.65,
+  endOverhangPx: 0.16,
+  trackLeadPx: 0.08,
+  endOverhangBlendU: 0.10,
+  endEaseOutU: 0.14,
 };
 ```
+
+You can switch fonts via presets (Akira Expanded, Impact, Inter Black via CDN, Apple Garamond Regular/Italic, or a custom URL) and swap reveal styles between the default rise and the grow-from-below effect directly in the UI.
 
 ## 📁 Project Structure
 

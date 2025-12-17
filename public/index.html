@@ -344,17 +344,18 @@
 
     wordsPerSecond:  2.5,
     curveLookAheadU: 0.055,
-    followLambda:    19,
-    lookAtLambda:    12,
+    followLambda:    16,
+    lookAtLambda:    11,
     revealWordLead:  1.15,
 
-    spaceMultiplier: 1.55,
+    spaceMultiplier: 1.68,
 
     revealMs:         220,
-    revealPopScale:   1.22,
+    revealStartScale: 0.92,
+    revealPopScale:   1.16,
     revealRise:       0.05,
     revealZ:          0.06,
-    revealOvershoot:  0.08,
+    revealOvershoot:  0.06,
     revealStyle:      'rise',
 
     emphasisProfile:  'documentary',
@@ -998,25 +999,28 @@
     mesh.userData.revealed = true;
     mesh.visible = true;
     mesh.userData.revealStart = now;
-
     mesh.material.opacity = 0;
 
     const style = mesh?.userData?.revealStyle || cfg.revealStyle;
-    if (style === 'grow-up') {
-      mesh.scale.setScalar(0.55);
-      mesh.position.set(
-        mesh.userData.basePos.x,
-        mesh.userData.basePos.y - Math.abs(cfg.revealRise) * 2.2,
-        mesh.userData.basePos.z - Math.abs(cfg.revealZ) * 1.4
-      );
-      return;
-    }
+    const startScale = style === 'grow-up'
+      ? cfg.revealStartScale * 0.9
+      : cfg.revealStartScale;
+    const rise = style === 'grow-up'
+      ? -Math.abs(cfg.revealRise) * 1.45
+      : cfg.revealRise * 0.75;
+    const depth = style === 'grow-up'
+      ? -Math.abs(cfg.revealZ) * 1.2
+      : cfg.revealZ * 0.55;
 
-    mesh.scale.setScalar(cfg.revealPopScale);
+    mesh.userData.revealStartScale = startScale;
+    mesh.userData.revealOffsetY = rise;
+    mesh.userData.revealOffsetZ = depth;
+
+    mesh.scale.setScalar(startScale);
     mesh.position.set(
       mesh.userData.basePos.x,
-      mesh.userData.basePos.y + cfg.revealRise,
-      mesh.userData.basePos.z + cfg.revealZ
+      mesh.userData.basePos.y + rise,
+      mesh.userData.basePos.z + depth
     );
   }
 
@@ -1028,39 +1032,23 @@
     const elapsed = now - t0;
     const t = clamp01(elapsed / cfg.revealMs);
     const profile = getEmphasisProfile();
-    const a = easeOutCubic(t);
-    mesh.material.opacity = Math.min(1, a * 1.05);
+    const opacityEase = smooth01(t);
+    mesh.material.opacity = Math.min(1, opacityEase * 1.08);
 
-    let styleScale = 1;
-    const style = mesh?.userData?.revealStyle || cfg.revealStyle;
+    const startScale = mesh.userData.revealStartScale ?? cfg.revealStartScale;
+    const rise = mesh.userData.revealOffsetY ?? 0;
+    const depth = mesh.userData.revealOffsetZ ?? 0;
 
-    if (style === 'grow-up') {
-      const eased = smooth01(t);
-      const startScale = 0.55;
-      const endScale = 1.04;
-      const growZ = Math.abs(cfg.revealZ) * 1.4;
-      const rise = Math.abs(cfg.revealRise) * 2.2;
-      styleScale = startScale + (endScale - startScale) * eased;
-      mesh.position.set(
-        mesh.userData.basePos.x,
-        mesh.userData.basePos.y - rise + (rise * eased),
-        mesh.userData.basePos.z - growZ + (growZ * eased)
-      );
-    } else {
-      const pop = easeOutBack(t, cfg.revealOvershoot);
-      const s = 1 + (cfg.revealPopScale - 1) * (1 - t);
-      const settled = 1 + (s - 1) * (1 / pop);
-      styleScale = settled;
+    const soft = smooth01(t);
+    const settleEase = easeOutCubic(t);
+    const peak = 1 + Math.max(0, cfg.revealOvershoot || 0) * (1 - settleEase) * 0.55;
+    const styleScale = THREE.MathUtils.lerp(startScale, peak, soft);
 
-      const rise = (1 - a) * cfg.revealRise;
-      const zPush = (1 - a) * cfg.revealZ;
-
-      mesh.position.set(
-        mesh.userData.basePos.x,
-        mesh.userData.basePos.y + rise,
-        mesh.userData.basePos.z + zPush
-      );
-    }
+    mesh.position.set(
+      mesh.userData.basePos.x,
+      mesh.userData.basePos.y + rise * (1 - soft),
+      mesh.userData.basePos.z + depth * (1 - soft)
+    );
 
     const emScale = emphasisScaleFor(mesh, elapsed, profile);
     mesh.scale.setScalar(styleScale * emScale);
@@ -1239,6 +1227,8 @@
     const baseCamDistance  = cfg.cameraDistance + (lineProfile?.cameraDistanceOffset ?? 0);
     let camDistance = baseCamDistance;
     let lastNow = performance.now();
+    let targetX = camera.position.x;
+    let targetY = camera.position.y;
 
     function frame(now) {
       const dt = Math.max(0.001, (now - lastNow) / 1000);
@@ -1260,7 +1250,7 @@
       const activeProgress = (typeof activeIdx === 'number' && activeIdx >= 0)
         ? clamp01(activeIdx / Math.max(1, n - 1))
         : 0;
-      const adjustedLookAhead = lookAheadU * (0.55 + 0.45 * activeProgress);
+      const adjustedLookAhead = lookAheadU * (0.45 + 0.35 * activeProgress);
       const t2 = Math.min(1, t + adjustedLookAhead);
       const isEmphasis = activeIdx >= 0 && Array.isArray(emphasisFlags) && emphasisFlags[activeIdx];
       const isTerminal = activeIdx === (n - 1);
@@ -1273,6 +1263,10 @@
         target.lerp(focus, blend);
       }
       target = shapeTargetWithBounds(target, uRaw, c2, widths, bounds, bias);
+
+      const targetLambda = Math.max(0.1, followLambda * 1.05);
+      targetX = damp(targetX, target.x, targetLambda, dt);
+      targetY = damp(targetY, target.y, targetLambda, dt);
 
       if (Array.isArray(words) && words.length === meshes.length) {
         for (let k = 0; k < words.length; k++) {
@@ -1291,14 +1285,16 @@
       const followScale = (isEmphasis ? (emphasisProfile?.emphasisFollowMult ?? 1) : 1) * (isTerminal ? (emphasisProfile?.terminalFollowMult ?? 1) : 1);
       const lookScale = (isEmphasis ? (emphasisProfile?.emphasisLookAtMult ?? 1) : 1) * (isTerminal ? (emphasisProfile?.terminalLookAtMult ?? 1) : 1);
 
-      camX = damp(camX, target.x, Math.max(0.1, followLambda * followScale), dt);
-      camY = damp(camY, target.y, Math.max(0.1, followLambda * followScale), dt);
+      const camLambda = Math.max(0.08, followLambda * followScale * 0.9);
+      camX = damp(camX, targetX, camLambda, dt);
+      camY = damp(camY, targetY, camLambda, dt);
 
       const desiredDistance = frameCameraDistance(baseCamDistance, activeIdx, widths, bounds);
       camDistance = damp(camDistance, desiredDistance, Math.max(2.5, followLambda * 0.55), dt);
 
-      lookAtX = damp(lookAtX, target.x, Math.max(0.1, lookLambda * lookScale), dt);
-      lookAtY = damp(lookAtY, target.y, Math.max(0.1, lookLambda * lookScale), dt);
+      const lookTargetLambda = Math.max(0.08, lookLambda * lookScale * 0.9);
+      lookAtX = damp(lookAtX, targetX, lookTargetLambda, dt);
+      lookAtY = damp(lookAtY, targetY, lookTargetLambda, dt);
 
       camera.position.set(camX, camY, camDistance);
       camera.lookAt(lookAtX, lookAtY, target.z);
@@ -1372,6 +1368,8 @@
     const baseCamDistance    = cfg.cameraDistance + (lineProfile?.cameraDistanceOffset ?? 0);
     let camDistance = baseCamDistance;
     let lastNow = performance.now();
+    let targetX = camera.position.x;
+    let targetY = camera.position.y;
 
     function frame(now){
       const dt = Math.max(0.001, (now - lastNow) / 1000);
@@ -1392,7 +1390,7 @@
       const activeProgress = (typeof activeIdx === 'number' && activeIdx >= 0)
         ? clamp01(activeIdx / Math.max(1, n - 1))
         : 0;
-      const adjustedLookAhead = lookAheadU * (0.55 + 0.45 * activeProgress);
+      const adjustedLookAhead = lookAheadU * (0.45 + 0.35 * activeProgress);
       const t2 = Math.min(1, t + adjustedLookAhead);
 
       const isEmphasis = activeIdx >= 0 && Array.isArray(emphasisFlags) && emphasisFlags[activeIdx];
@@ -1407,6 +1405,10 @@
       }
       target = shapeTargetWithBounds(target, uRaw, c2, widths, bounds, bias);
 
+      const targetLambda = Math.max(0.1, followLambda * 1.05);
+      targetX = damp(targetX, target.x, targetLambda, dt);
+      targetY = damp(targetY, target.y, targetLambda, dt);
+
       const p = uRaw * (n - 1);
       const revealIdx = Math.min(n - 1, Math.floor(p + revealWordLead));
       for (let k = 0; k <= revealIdx; k++) startReveal(meshes[k], now);
@@ -1418,14 +1420,16 @@
       const followScale = (isEmphasis ? (emphasisProfile?.emphasisFollowMult ?? 1) : 1) * (isTerminal ? (emphasisProfile?.terminalFollowMult ?? 1) : 1);
       const lookScale = (isEmphasis ? (emphasisProfile?.emphasisLookAtMult ?? 1) : 1) * (isTerminal ? (emphasisProfile?.terminalLookAtMult ?? 1) : 1);
 
-      camX = damp(camX, target.x, Math.max(0.1, followLambda * followScale), dt);
-      camY = damp(camY, target.y, Math.max(0.1, followLambda * followScale), dt);
+      const camLambda = Math.max(0.08, followLambda * followScale * 0.9);
+      camX = damp(camX, targetX, camLambda, dt);
+      camY = damp(camY, targetY, camLambda, dt);
 
       const desiredDistance = frameCameraDistance(baseCamDistance, activeIdx, widths, bounds);
       camDistance = damp(camDistance, desiredDistance, Math.max(2.5, followLambda * 0.55), dt);
 
-      lookAtX = damp(lookAtX, target.x, Math.max(0.1, lookLambda * lookScale), dt);
-      lookAtY = damp(lookAtY, target.y, Math.max(0.1, lookLambda * lookScale), dt);
+      const lookTargetLambda = Math.max(0.08, lookLambda * lookScale * 0.9);
+      lookAtX = damp(lookAtX, targetX, lookTargetLambda, dt);
+      lookAtY = damp(lookAtY, targetY, lookTargetLambda, dt);
 
       camera.position.set(camX, camY, camDistance);
       camera.lookAt(lookAtX, lookAtY, target.z);
@@ -1686,6 +1690,7 @@
     ['revealWordLead', 'number', 'revealWordLead', 'reveal early (fallback)'],
     ['spaceMultiplier', 'number', 'spaceMultiplier', 'inter-word spacing'],
     ['revealMs', 'number', 'revealMs', 'reveal anim duration ms'],
+    ['revealStartScale', 'number', 'revealStartScale', 'initial scale at reveal'],
     ['revealPopScale', 'number', 'revealPopScale', 'pop scale'],
     ['revealRise', 'number', 'revealRise', 'rise offset'],
     ['revealZ', 'number', 'revealZ', 'z push'],

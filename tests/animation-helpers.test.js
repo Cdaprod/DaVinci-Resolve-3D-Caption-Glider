@@ -3,7 +3,7 @@
 // Example: `node tests/animation-helpers.test.js`
 
 const assert = require('assert');
-const { clamp01, computeCenterBounds, endBias, extractEmphasisToken, parseScriptLines, visibleHalfWidth, requiredDistanceForSpan } = require('../public/animation-helpers');
+const { clamp01, computeCenterBounds, endBias, extractEmphasisToken, parseScriptLines, stripControlTokens, normalizeProfileToken, visibleHalfWidth, requiredDistanceForSpan } = require('../public/animation-helpers');
 
 function testClamp01() {
   assert.strictEqual(clamp01(-1), 0);
@@ -66,6 +66,25 @@ function testParseScriptLines() {
     pauseMs: 0,
     holdMs: 200,
   });
+}
+
+function testStripControlTokens() {
+  const { text, pauseMs, holdMs } = stripControlTokens('Lead [PAUSE=150] space [HOLD=220] end');
+  assert.strictEqual(text, 'Lead   space   end');
+  assert.strictEqual(pauseMs, 150);
+  assert.strictEqual(holdMs, 220);
+
+  const empty = stripControlTokens('[PAUSE=10][HOLD=5]');
+  assert.strictEqual(empty.text, '');
+  assert.strictEqual(empty.pauseMs, 10);
+  assert.strictEqual(empty.holdMs, 5);
+}
+
+function testNormalizeProfileToken() {
+  assert.strictEqual(normalizeProfileToken('a'), 'A');
+  assert.strictEqual(normalizeProfileToken('B '), 'B');
+  assert.strictEqual(normalizeProfileToken('default'), 'default');
+  assert.strictEqual(normalizeProfileToken(''), 'default');
 }
 
 function testParseScriptLinesDefaultFirst() {
@@ -139,6 +158,8 @@ function run() {
   testExtractEmphasisToken();
   testParseScriptLines();
   testParseScriptLinesDefaultFirst();
+  testStripControlTokens();
+  testNormalizeProfileToken();
   testVisibleHalfWidth();
   testRequiredDistanceForSpan();
   console.log('animation-helpers: all tests passed');

@@ -144,22 +144,23 @@ const cfg = {
   // Animation timing
   wordsPerSecond: 2.5,
   curveLookAheadU: 0.055,
-  followLambda: 19,
-  lookAtLambda: 12,
+  followLambda: 16,
+  lookAtLambda: 11,
   revealWordLead: 1.15,
 
   // Reveal animation
   revealMs: 220,
-  revealPopScale: 1.22,
+  revealStartScale: 0.92,
+  revealPopScale: 1.16,
   revealRise: 0.05,
   revealZ: 0.06,
-  revealOvershoot: 0.08,
+  revealOvershoot: 0.06,
   revealStyle: 'rise', // 'rise' or 'grow-up'
 
   emphasisProfile: 'documentary', // documentary (stacked emphasis) or minimal
 
   // Spacing & stacking
-  spaceMultiplier: 1.55,
+  spaceMultiplier: 1.68,
   keepPreviousLinesVisible: false,
   lineHoldMsAfterComplete: 620,
   stackLines: true,

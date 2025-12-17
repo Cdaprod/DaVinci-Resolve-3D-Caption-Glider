@@ -147,5 +147,7 @@
     requiredDistanceForSpan,
     extractEmphasisToken,
     parseScriptLines,
+    stripControlTokens,
+    normalizeProfileToken,
   };
 });

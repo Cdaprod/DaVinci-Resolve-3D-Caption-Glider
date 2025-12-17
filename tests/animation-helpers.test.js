@@ -68,12 +68,64 @@ function testParseScriptLines() {
   });
 }
 
+function testParseScriptLinesDefaultFirst() {
+  const lines = [
+    'Default start with no marker',
+    '#A Calm dolly line',
+    '[PAUSE=220]',
+    '#B',
+    'Assertive punch lands here',
+    '[HOLD=320]',
+    '#C Dramatic settle widens the lens',
+    '#default Return to the glide',
+  ];
+
+  const segments = parseScriptLines(lines, 'default');
+  assert.strictEqual(segments.length, 5);
+
+  assert.deepStrictEqual(segments[0], {
+    profileId: 'default',
+    text: 'Default start with no marker',
+    pauseMs: 0,
+    holdMs: 0,
+  });
+
+  assert.deepStrictEqual(segments[1], {
+    profileId: 'A',
+    text: 'Calm dolly line',
+    pauseMs: 0,
+    holdMs: 0,
+  });
+
+  assert.deepStrictEqual(segments[2], {
+    profileId: 'B',
+    text: 'Assertive punch lands here',
+    pauseMs: 220,
+    holdMs: 0,
+  });
+
+  assert.deepStrictEqual(segments[3], {
+    profileId: 'C',
+    text: 'Dramatic settle widens the lens',
+    pauseMs: 0,
+    holdMs: 320,
+  });
+
+  assert.deepStrictEqual(segments[4], {
+    profileId: 'default',
+    text: 'Return to the glide',
+    pauseMs: 0,
+    holdMs: 0,
+  });
+}
+
 function run() {
   testClamp01();
   testComputeCenterBounds();
   testEndBias();
   testExtractEmphasisToken();
   testParseScriptLines();
+  testParseScriptLinesDefaultFirst();
   console.log('animation-helpers: all tests passed');
 }
 

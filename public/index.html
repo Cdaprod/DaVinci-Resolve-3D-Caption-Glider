@@ -285,7 +285,7 @@
     <div id="mini">
       Export note: recording uses <code>canvas.captureStream</code> + <code>MediaRecorder</code>.
       Some iOS browsers may block WebM recording.
-      Script tokens: <code>#A/#B/#C</code> switch profiles; <code>[PAUSE=ms]</code> / <code>[HOLD=ms]</code> apply to the next line.
+      Script tokens: <code>#A/#B/#C</code> switch profiles, <code>#default</code> resets to base; <code>[PAUSE=ms]</code> / <code>[HOLD=ms]</code> apply to the next line.
     </div>
   </div>
 </div>
@@ -361,36 +361,36 @@
     },
     A: {
       label: 'Profile A (calm dolly)',
-      speedMultiplier: 0.92,
-      followMult: 0.9,
-      lookAtMult: 0.95,
-      lookAheadOffset: -0.005,
-      cameraDistanceOffset: 0.08,
-      holdMs: 120,
+      speedMultiplier: 0.9,
+      followMult: 0.86,
+      lookAtMult: 0.9,
+      lookAheadOffset: -0.006,
+      cameraDistanceOffset: 0.1,
+      holdMs: 160,
       revealStyle: 'grow-up',
-      endBiasPx: 0.02,
+      endBiasPx: 0.025,
     },
     B: {
       label: 'Profile B (tight + assertive)',
-      speedMultiplier: 1.05,
-      followMult: 1.1,
-      lookAtMult: 1.05,
-      lookAheadOffset: 0.01,
-      cameraDistanceOffset: -0.05,
-      holdMs: 80,
+      speedMultiplier: 1.12,
+      followMult: 1.18,
+      lookAtMult: 1.1,
+      lookAheadOffset: 0.014,
+      cameraDistanceOffset: -0.07,
+      holdMs: 90,
       revealStyle: 'rise',
-      endBiasPx: 0.04,
+      endBiasPx: 0.05,
     },
     C: {
       label: 'Profile C (dramatic settle)',
-      speedMultiplier: 0.85,
-      followMult: 0.82,
-      lookAtMult: 0.9,
-      lookAheadOffset: -0.012,
-      cameraDistanceOffset: 0.12,
-      holdMs: 220,
+      speedMultiplier: 0.82,
+      followMult: 0.8,
+      lookAtMult: 0.88,
+      lookAheadOffset: -0.015,
+      cameraDistanceOffset: 0.16,
+      holdMs: 260,
       revealStyle: 'grow-up',
-      endBiasPx: 0.06,
+      endBiasPx: 0.07,
     }
   };
 

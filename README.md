@@ -184,18 +184,19 @@ Use **bold** markers in your transcript or fallback lines to flag semantic empha
 You start in the default profile automatically—no leading token required. Add a directive-only line to switch moods, or prefix a line to switch and render on the same row:
 
 ```text
-Opening line in default profile
-#A Calm gliding line (Profile A)
-[PAUSE=200]
-#B Assertive pacing kicks in here
-[HOLD=300]
-#C
-Dramatic settle to close the beat (Profile C)
+Cinematic scripting starts in default (no marker required)
+#A Calm dolly profile slows the follow and softens reveals
+[PAUSE=220]
+#B Assertive pacing tightens follow and pops punctuation
+[HOLD=320]
+#C Dramatic settle widens the lens and lingers on the last word
+#default Return to the default glide once the moods finish
 ```
 
-- `#A`, `#B`, `#C` toggle per-line camera/reveal pacing until the next switch.
+- `#A`, `#B`, `#C` toggle per-line camera/reveal pacing until the next switch; `#default` returns to the base glide.
 - `[PAUSE=ms]` delays the next content line; `[HOLD=ms]` extends its post-line hold. Directive-only lines with these tokens carry the pause/hold forward.
 - Profiles adjust follow tightness, look-ahead, camera distance, overhang bias, reveal style, and pacing speed while stacking with the existing semantic/terminal emphasis rules.
+- Profile moods: **A** = calm dolly with wider distance and softer bias, **B** = tight/assertive with faster follow and a sharper pop, **C** = dramatic settle with long holds, farther camera, and lingering overhang.
 
 ## 📁 Project Structure
 

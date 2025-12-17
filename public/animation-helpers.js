@@ -49,6 +49,12 @@
     return e * maxBias;
   }
 
+  function extractEmphasisToken(wordText = '') {
+    const isEmphasized = /\*\*(.+?)\*\*/.test(wordText);
+    const cleanText = String(wordText).replace(/\*\*/g, '') || String(wordText || '').trim();
+    return { cleanText, isEmphasized };
+  }
+
   return {
     clamp01,
     easeOutCubic,
@@ -56,5 +62,6 @@
     damp,
     computeCenterBounds,
     endBias,
+    extractEmphasisToken,
   };
 });

@@ -3,7 +3,7 @@
 // Example: `node tests/animation-helpers.test.js`
 
 const assert = require('assert');
-const { clamp01, computeCenterBounds, endBias } = require('../public/animation-helpers');
+const { clamp01, computeCenterBounds, endBias, extractEmphasisToken } = require('../public/animation-helpers');
 
 function testClamp01() {
   assert.strictEqual(clamp01(-1), 0);
@@ -24,10 +24,21 @@ function testEndBias() {
   assert(nearEnd <= 0.2 + 1e-9 && nearEnd >= 0.19, 'bias should reach near max');
 }
 
+function testExtractEmphasisToken() {
+  const emph = extractEmphasisToken('**Bold**');
+  assert.strictEqual(emph.cleanText, 'Bold');
+  assert.strictEqual(emph.isEmphasized, true);
+
+  const plain = extractEmphasisToken('steady');
+  assert.strictEqual(plain.cleanText, 'steady');
+  assert.strictEqual(plain.isEmphasized, false);
+}
+
 function run() {
   testClamp01();
   testComputeCenterBounds();
   testEndBias();
+  testExtractEmphasisToken();
   console.log('animation-helpers: all tests passed');
 }
 

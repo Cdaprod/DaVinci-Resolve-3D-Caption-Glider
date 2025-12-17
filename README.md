@@ -100,7 +100,7 @@ node tests/animation-helpers.test.js
 
 - Edit `cfg` object in HTML for styling
 - Adjust animation speed, colors, reveal timing
-- Swap fonts using the new preset dropdown (Akira Expanded, Impact, Inter Black via CDN, Apple Garamond, or your own URL) and pick reveal styles (pop rise vs. grow-up)
+- Swap fonts using the new preset dropdown (Akira Expanded, Impact, Inter Black via CDN, Apple Garamond, or your own URL) and pick reveal styles (pop rise vs. grow-up) plus emphasis profiles (Documentary or Minimal)
 
 1. **Export to Timeline**
 
@@ -155,6 +155,8 @@ const cfg = {
   revealOvershoot: 0.08,
   revealStyle: 'rise', // 'rise' or 'grow-up'
 
+  emphasisProfile: 'documentary', // documentary (stacked emphasis) or minimal
+
   // Spacing & stacking
   spaceMultiplier: 1.55,
   keepPreviousLinesVisible: false,
@@ -174,6 +176,8 @@ const cfg = {
 ```
 
 You can switch fonts via presets (Akira Expanded, Impact, Inter Black via CDN, Apple Garamond Regular/Italic, or a custom URL) and swap reveal styles between the default rise and the grow-from-below effect directly in the UI.
+
+Use **bold** markers in your transcript or fallback lines to flag semantic emphasis. The default “Documentary” emphasis profile stacks semantic emphasis (scale 1.08 with a 260ms settle and +120ms hold) with terminal-word cadence (+0.45× word-width drift and +300ms hold) so bold last words land with a gentle overhang. A “Minimal” profile is also available for a lighter touch.
 
 ## 📁 Project Structure
 

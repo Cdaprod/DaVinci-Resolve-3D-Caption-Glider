@@ -252,6 +252,11 @@
     </label>
 
     <label>
+      Emphasis profile
+      <select id="emphasisProfile"></select>
+    </label>
+
+    <label>
       End overhang: <span id="ohVal">0.65</span> (× last-word width)
       <input id="oh" type="range" min="0" max="1" step="0.05" value="0.65" />
     </label>
@@ -321,6 +326,8 @@
     revealOvershoot:  0.08,
     revealStyle:      'rise',
 
+    emphasisProfile:  'documentary',
+
     endOverhangFactor: 0.65,
     endOverhangPx:     0.16,
     trackLeadPx:       0.08,
@@ -386,6 +393,40 @@
     { id: 'grow-up', label: 'Grow from below / behind' }
   ];
 
+  const EMPHASIS_PROFILE_OPTIONS = [
+    { id: 'documentary', label: 'Documentary (semantic + terminal stack)' },
+    { id: 'minimal', label: 'Minimal (baseline only)' }
+  ];
+
+  const EMPHASIS_PROFILES = {
+    documentary: {
+      label: 'Documentary',
+      emphasisScale: 1.08,
+      emphasisSettleMs: 260,
+      emphasisDriftFrac: 0.08,
+      emphasisHoldMs: 120,
+      emphasisFollowMult: 0.72,
+      emphasisLookAtMult: 0.75,
+      terminalDriftFrac: 0.45,
+      terminalHoldMs: 300,
+      terminalFollowMult: 0.80,
+      terminalLookAtMult: 0.85
+    },
+    minimal: {
+      label: 'Minimal',
+      emphasisScale: 1.0,
+      emphasisSettleMs: 0,
+      emphasisDriftFrac: 0,
+      emphasisHoldMs: 0,
+      emphasisFollowMult: 1,
+      emphasisLookAtMult: 1,
+      terminalDriftFrac: 0.25,
+      terminalHoldMs: 160,
+      terminalFollowMult: 0.92,
+      terminalLookAtMult: 0.92
+    }
+  };
+
   const cfg = structuredClone(DEFAULT_CFG);
 
   // -------------------------
@@ -444,6 +485,7 @@
   const fontSelect = document.getElementById('fontSelect');
   const fontUrlInput = document.getElementById('fontUrl');
   const revealStyleSelect = document.getElementById('revealStyle');
+  const emphasisProfileSelect = document.getElementById('emphasisProfile');
   const keepPrevEl = document.getElementById('keepPrev');
 
   const btnLoad = document.getElementById('btnLoad');
@@ -519,6 +561,17 @@
     revealStyleSelect.value = cfg.revealStyle;
   }
 
+  function populateEmphasisProfiles() {
+    emphasisProfileSelect.innerHTML = '';
+    for (const p of EMPHASIS_PROFILE_OPTIONS) {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.label;
+      emphasisProfileSelect.appendChild(opt);
+    }
+    emphasisProfileSelect.value = cfg.emphasisProfile;
+  }
+
   fontSelect.addEventListener('change', () => {
     const preset = FONT_PRESETS.find(p => p.id === fontSelect.value);
     cfg.fontId = fontSelect.value;
@@ -535,6 +588,11 @@
   revealStyleSelect.addEventListener('change', () => {
     cfg.revealStyle = revealStyleSelect.value;
     setStatus('Reveal style set to: ' + cfg.revealStyle + '\n(Rebuild on Replay)');
+  });
+
+  emphasisProfileSelect.addEventListener('change', () => {
+    cfg.emphasisProfile = emphasisProfileSelect.value;
+    setStatus('Emphasis profile: ' + cfg.emphasisProfile + '\n(Semantic + terminal rules stacked)');
   });
 
   cfgDetails.addEventListener('toggle', () => {
@@ -555,6 +613,48 @@
   }
   function damp(current, target, lambda, dt) {
     return current + (target - current) * (1 - Math.exp(-lambda * dt));
+  }
+  function getEmphasisProfile() {
+    return EMPHASIS_PROFILES[cfg.emphasisProfile] || EMPHASIS_PROFILES.documentary || EMPHASIS_PROFILES[EMPHASIS_PROFILE_OPTIONS[0]?.id];
+  }
+  function parseEmphasisToken(wordText = '') {
+    const isEmphasized = /\*\*(.+?)\*\*/.test(wordText);
+    const cleanText = String(wordText).replace(/\*\*/g, '') || String(wordText || '').trim();
+    return { cleanText, isEmphasized };
+  }
+  function emphasisScaleFor(mesh, elapsedMs, profile) {
+    if (!mesh?.userData?.emphasis || !profile) return 1;
+    const settleMs = Math.max(0, profile.emphasisSettleMs ?? 0);
+    const window = cfg.revealMs + settleMs;
+    const t = window > 0 ? clamp01(elapsedMs / window) : 1;
+    const e = smooth01(t);
+    return 1 + (profile.emphasisScale - 1) * e;
+  }
+  function computeActiveWordIndex(words, currentTimeSec, uRaw, fallbackCount) {
+    if (Array.isArray(words) && words.length) {
+      let idx = -1;
+      for (let i = 0; i < words.length; i++) {
+        const start = Number(words[i].startTime ?? -Infinity);
+        if (currentTimeSec >= start) idx = i; else break;
+      }
+      if (idx >= 0) return Math.min(idx, words.length - 1);
+    }
+    if (typeof fallbackCount === 'number' && fallbackCount > 0) {
+      return Math.min(fallbackCount - 1, Math.floor(uRaw * (fallbackCount - 1)));
+    }
+    return -1;
+  }
+  function computeEmphasisBias(profile, activeIdx, emphasisFlags, widths, uRaw) {
+    if (!profile || activeIdx < 0 || !widths?.length) return 0;
+    const activeWidth = widths[activeIdx] || 0;
+    const isEmphasis = Array.isArray(emphasisFlags) ? !!emphasisFlags[activeIdx] : false;
+    let bias = 0;
+    if (isEmphasis) bias += activeWidth * (profile.emphasisDriftFrac ?? 0);
+    if (activeIdx === widths.length - 1) {
+      const settle = smooth01(uRaw);
+      bias += activeWidth * (profile.terminalDriftFrac ?? 0) * settle;
+    }
+    return bias;
   }
   function render() { renderer.render(scene, camera); }
 
@@ -643,13 +743,22 @@
     return ha * scale;
   }
 
-  function buildLine(font, lineText) {
-    const words = lineText.split(/\s+/);
+  function buildLine(font, lineText, wordMeta) {
     const group = new THREE.Group();
     const spaceW = getSpaceAdvance(font) * cfg.spaceMultiplier;
 
-    const wordData = words.map(w => {
-      const geom = new THREE.TextGeometry(w, {
+    const source = Array.isArray(wordMeta) && wordMeta.length
+      ? wordMeta.map(w => ({ ...w, text: String(w?.text ?? '').trim() }))
+      : lineText.split(/\s+/).map(w => ({ text: w }));
+
+    const emphasisFlags = [];
+    const normalizedWords = [];
+    const parsedWords = source.map((entry) => {
+      const { cleanText, isEmphasized } = parseEmphasisToken(entry.text);
+      if (!cleanText) return null;
+      emphasisFlags.push(isEmphasized);
+      normalizedWords.push({ ...entry, text: cleanText, emphasis: isEmphasized });
+      const geom = new THREE.TextGeometry(cleanText, {
         font,
         size: cfg.textSize,
         height: cfg.textDepth,
@@ -661,11 +770,11 @@
       const width = bb.max.x - bb.min.x;
       geom.translate(-bb.min.x, 0, 0);
       return { geom, width };
-    });
+    }).filter(Boolean);
 
     const totalW =
-      wordData.reduce((s,d)=>s+d.width,0) +
-      (words.length - 1) * spaceW;
+      parsedWords.reduce((s,d)=>s+d.width,0) +
+      (parsedWords.length - 1) * spaceW;
 
     let cursorX = -totalW / 2;
 
@@ -673,8 +782,8 @@
     const centers = [];
     const widths  = [];
 
-    for (let i = 0; i < wordData.length; i++) {
-      const d = wordData[i];
+    for (let i = 0; i < parsedWords.length; i++) {
+      const d = parsedWords[i];
 
       const mat = baseMat.clone();
       mat.opacity = 0;
@@ -686,6 +795,8 @@
       mesh.userData.revealStart = null;
       mesh.userData.revealed = false;
       mesh.userData.basePos = mesh.position.clone();
+      mesh.userData.emphasis = !!emphasisFlags[i];
+      mesh.userData.isLast = (i === parsedWords.length - 1);
 
       group.add(mesh);
       meshes.push(mesh);
@@ -696,7 +807,7 @@
       cursorX += d.width + spaceW;
     }
 
-    return { group, meshes, centers, widths };
+    return { group, meshes, centers, widths, emphasisFlags, normalizedWords };
   }
 
   function transcriptionToTimedLines(transcription, wordsPerLine = 8) {
@@ -705,10 +816,12 @@
     for (let i = 0; i < words.length; i += wordsPerLine) {
       const chunk = words.slice(i, i + wordsPerLine);
       if (!chunk.length) continue;
-      const text = chunk.map(w => w.text).join(' ');
+      const parsed = chunk.map(w => parseEmphasisToken(w.text ?? ''));
+      const text = parsed.map(p => p.cleanText).join(' ');
       const startTime = Number(chunk[0].startTime ?? 0);
       const endTime = Number(chunk[chunk.length - 1].endTime ?? startTime);
-      lines.push({ text, startTime, endTime, words: chunk });
+      const normalizedWords = chunk.map((w, idx) => ({ ...w, text: parsed[idx].cleanText, emphasis: parsed[idx].isEmphasized }));
+      lines.push({ text, startTime, endTime, words: normalizedWords });
     }
     return lines;
   }
@@ -749,10 +862,13 @@
     const t0 = mesh.userData.revealStart;
     if (t0 === null) return;
 
-    const t = clamp01((now - t0) / cfg.revealMs);
+    const elapsed = now - t0;
+    const t = clamp01(elapsed / cfg.revealMs);
+    const profile = getEmphasisProfile();
     const a = easeOutCubic(t);
-    mesh.material.opacity = a;
+    mesh.material.opacity = Math.min(1, a * 1.05);
 
+    let styleScale = 1;
     const style = cfg.revealStyle;
 
     if (style === 'grow-up') {
@@ -761,7 +877,7 @@
       const endScale = 1.04;
       const growZ = Math.abs(cfg.revealZ) * 1.4;
       const rise = Math.abs(cfg.revealRise) * 2.2;
-      mesh.scale.setScalar(startScale + (endScale - startScale) * eased);
+      styleScale = startScale + (endScale - startScale) * eased;
       mesh.position.set(
         mesh.userData.basePos.x,
         mesh.userData.basePos.y - rise + (rise * eased),
@@ -771,7 +887,7 @@
       const pop = easeOutBack(t, cfg.revealOvershoot);
       const s = 1 + (cfg.revealPopScale - 1) * (1 - t);
       const settled = 1 + (s - 1) * (1 / pop);
-      mesh.scale.setScalar(settled);
+      styleScale = settled;
 
       const rise = (1 - a) * cfg.revealRise;
       const zPush = (1 - a) * cfg.revealZ;
@@ -783,10 +899,13 @@
       );
     }
 
+    const emScale = emphasisScaleFor(mesh, elapsed, profile);
+    mesh.scale.setScalar(styleScale * emScale);
+
     if (t >= 1) {
       mesh.userData.revealStart = null;
       mesh.material.opacity = 1;
-      mesh.scale.setScalar(1);
+      mesh.scale.setScalar(emphasisScaleFor(mesh, cfg.revealMs + (profile?.emphasisSettleMs ?? 0), profile));
       mesh.position.copy(mesh.userData.basePos);
     }
   }
@@ -810,13 +929,13 @@
     return easeOutCubic(t) * maxBias;
   }
 
-  function shapeTargetWithBounds(target, u, centers, widths, bounds) {
+  function shapeTargetWithBounds(target, u, centers, widths, bounds, extraBias = 0) {
     if (!centers?.length) return target;
     const { minX, maxX } = bounds ?? computeCenterBounds(centers);
     if (!isFinite(minX) || !isFinite(maxX)) return target;
 
     const lastW = widths?.[widths.length - 1] ?? 0;
-    const bias = endBias(u, cfg.endOverhangPx + (lastW * cfg.endOverhangFactor));
+    const bias = endBias(u, cfg.endOverhangPx + (lastW * cfg.endOverhangFactor)) + (extraBias || 0);
 
     const out = target.clone();
     const lead = Math.max(0, cfg.trackLeadPx);
@@ -842,8 +961,9 @@
   // Animation: timed
   // -------------------------
   function animateLineGlideWithTiming(lineObj, onComplete) {
-    const { meshes, centers, widths, words, startTime, endTime, group } = lineObj;
+    const { meshes, centers, widths, words, startTime, endTime, group, emphasisFlags } = lineObj;
     const n = centers.length;
+    const profile = getEmphasisProfile();
 
     for (const m of meshes) {
       m.visible = false;
@@ -894,11 +1014,16 @@
       const t = idx / (lengths.length - 1);
       const t2 = Math.min(1, t + lookAheadU);
 
+      const currentTime = startTime + (uRaw * durationSec);
+      const activeIdx = computeActiveWordIndex(Array.isArray(words) && words.length === meshes.length ? words : null, currentTime, uRaw, n);
+      const isEmphasis = activeIdx >= 0 && Array.isArray(emphasisFlags) && emphasisFlags[activeIdx];
+      const isTerminal = activeIdx === (n - 1);
+      const bias = computeEmphasisBias(profile, activeIdx, emphasisFlags, widths, uRaw);
+
       let target = curve.getPointAt(t2);
-      target = shapeTargetWithBounds(target, uRaw, c2, widths, bounds);
+      target = shapeTargetWithBounds(target, uRaw, c2, widths, bounds, bias);
 
       if (Array.isArray(words) && words.length === meshes.length) {
-        const currentTime = startTime + (uRaw * durationSec);
         for (let k = 0; k < words.length; k++) {
           if (currentTime >= Number(words[k].startTime ?? 0)) startReveal(meshes[k], now);
         }
@@ -910,11 +1035,14 @@
 
       for (const m of meshes) tickReveal(m, now);
 
-      camX = damp(camX, target.x, followLambda, dt);
-      camY = damp(camY, target.y, followLambda, dt);
+      const followScale = (isEmphasis ? (profile?.emphasisFollowMult ?? 1) : 1) * (isTerminal ? (profile?.terminalFollowMult ?? 1) : 1);
+      const lookScale = (isEmphasis ? (profile?.emphasisLookAtMult ?? 1) : 1) * (isTerminal ? (profile?.terminalLookAtMult ?? 1) : 1);
 
-      lookAtX = damp(lookAtX, target.x, cfg.lookAtLambda, dt);
-      lookAtY = damp(lookAtY, target.y, cfg.lookAtLambda, dt);
+      camX = damp(camX, target.x, Math.max(0.1, followLambda * followScale), dt);
+      camY = damp(camY, target.y, Math.max(0.1, followLambda * followScale), dt);
+
+      lookAtX = damp(lookAtX, target.x, Math.max(0.1, cfg.lookAtLambda * lookScale), dt);
+      lookAtY = damp(lookAtY, target.y, Math.max(0.1, cfg.lookAtLambda * lookScale), dt);
 
       camera.position.set(camX, camY, cfg.cameraDistance);
       camera.lookAt(lookAtX, lookAtY, target.z);
@@ -930,7 +1058,9 @@
           m.scale.setScalar(1);
           m.position.copy(m.userData.basePos);
         }
-        setTimeout(() => onComplete?.(), cfg.lineHoldMsAfterComplete);
+        const terminalHold = (profile?.terminalHoldMs ?? 0) + ((Array.isArray(emphasisFlags) && emphasisFlags[n - 1]) ? (profile?.emphasisHoldMs ?? 0) : 0);
+        const hold = Math.max(0, cfg.lineHoldMsAfterComplete + terminalHold);
+        setTimeout(() => onComplete?.(), hold);
       }
     }
 
@@ -941,8 +1071,9 @@
   // Animation: fallback
   // -------------------------
   function animateLineGlideFallback(lineObj, onComplete){
-    const { meshes, centers, widths, group } = lineObj;
+    const { meshes, centers, widths, group, emphasisFlags } = lineObj;
     const n = centers.length;
+    const profile = getEmphasisProfile();
 
     for (const m of meshes) {
       m.visible = false;
@@ -993,8 +1124,13 @@
       const t = idx / (lengths.length - 1);
       const t2 = Math.min(1, t + lookAheadU);
 
+      const activeIdx = computeActiveWordIndex(null, 0, uRaw, n);
+      const isEmphasis = activeIdx >= 0 && Array.isArray(emphasisFlags) && emphasisFlags[activeIdx];
+      const isTerminal = activeIdx === (n - 1);
+      const bias = computeEmphasisBias(profile, activeIdx, emphasisFlags, widths, uRaw);
+
       let target = curve.getPointAt(t2);
-      target = shapeTargetWithBounds(target, uRaw, c2, widths, bounds);
+      target = shapeTargetWithBounds(target, uRaw, c2, widths, bounds, bias);
 
       const p = uRaw * (n - 1);
       const revealIdx = Math.min(n - 1, Math.floor(p + revealWordLead));
@@ -1002,11 +1138,14 @@
 
       for (const m of meshes) tickReveal(m, now);
 
-      camX = damp(camX, target.x, followLambda, dt);
-      camY = damp(camY, target.y, followLambda, dt);
+      const followScale = (isEmphasis ? (profile?.emphasisFollowMult ?? 1) : 1) * (isTerminal ? (profile?.terminalFollowMult ?? 1) : 1);
+      const lookScale = (isEmphasis ? (profile?.emphasisLookAtMult ?? 1) : 1) * (isTerminal ? (profile?.terminalLookAtMult ?? 1) : 1);
 
-      lookAtX = damp(lookAtX, target.x, cfg.lookAtLambda, dt);
-      lookAtY = damp(lookAtY, target.y, cfg.lookAtLambda, dt);
+      camX = damp(camX, target.x, Math.max(0.1, followLambda * followScale), dt);
+      camY = damp(camY, target.y, Math.max(0.1, followLambda * followScale), dt);
+
+      lookAtX = damp(lookAtX, target.x, Math.max(0.1, cfg.lookAtLambda * lookScale), dt);
+      lookAtY = damp(lookAtY, target.y, Math.max(0.1, cfg.lookAtLambda * lookScale), dt);
 
       camera.position.set(camX, camY, cfg.cameraDistance);
       camera.lookAt(lookAtX, lookAtY, target.z);
@@ -1022,7 +1161,9 @@
           m.scale.setScalar(1);
           m.position.copy(m.userData.basePos);
         }
-        setTimeout(() => onComplete?.(), cfg.lineHoldMsAfterComplete);
+        const terminalHold = (profile?.terminalHoldMs ?? 0) + ((Array.isArray(emphasisFlags) && emphasisFlags[n - 1]) ? (profile?.emphasisHoldMs ?? 0) : 0);
+        const hold = Math.max(0, cfg.lineHoldMsAfterComplete + terminalHold);
+        setTimeout(() => onComplete?.(), hold);
       }
     }
 
@@ -1123,10 +1264,10 @@
     clearAllLinesFromScene();
     lineObjs = [];
     for (const ln of timedLines) {
-      const obj = buildLine(font, ln.text);
+      const obj = buildLine(font, ln.text, ln.words);
       obj.startTime = ln.startTime;
       obj.endTime = ln.endTime;
-      obj.words = ln.words;
+      obj.words = obj.normalizedWords || ln.words;
       lineObjs.push(obj);
     }
   }
@@ -1237,6 +1378,7 @@
     ['revealZ', 'number', 'revealZ', 'z push'],
     ['revealOvershoot', 'number', 'revealOvershoot', 'back overshoot'],
     ['revealStyle', 'text', 'revealStyle', 'rise or grow-up'],
+    ['emphasisProfile', 'text', 'emphasisProfile', 'documentary or minimal'],
     ['endOverhangFactor', 'number', 'endOverhangFactor', '× last-word width near end'],
     ['endOverhangPx', 'number', 'endOverhangPx', 'extra push in world units'],
     ['trackLeadPx', 'number', 'trackLeadPx', 'left clamp padding'],
@@ -1303,6 +1445,8 @@
     keepPrevEl.checked = !!cfg.keepPreviousLinesVisible;
     ohValEl.textContent = Number(cfg.endOverhangFactor).toFixed(2);
     ohEl.value = String(cfg.endOverhangFactor);
+    revealStyleSelect.value = cfg.revealStyle;
+    emphasisProfileSelect.value = cfg.emphasisProfile;
 
     baseMat = createBaseMaterial();
 
@@ -1319,6 +1463,7 @@
     fontSelect.value = cfg.fontId;
     fontUrlInput.value = cfg.fontUrl;
     revealStyleSelect.value = cfg.revealStyle;
+    emphasisProfileSelect.value = cfg.emphasisProfile;
     ohEl.value = String(cfg.endOverhangFactor);
     ohValEl.textContent = Number(cfg.endOverhangFactor).toFixed(2);
     setStatus('cfg reset to defaults.\n(Rebuild on Replay)');
@@ -1416,6 +1561,7 @@
   buildCfgEditorUI();
   populateFontPresets();
   populateRevealStyles();
+  populateEmphasisProfiles();
   keepPrevEl.checked = !!cfg.keepPreviousLinesVisible;
 
   loadFontFromSelection().then(async (font) => {

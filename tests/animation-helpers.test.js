@@ -3,7 +3,7 @@
 // Example: `node tests/animation-helpers.test.js`
 
 const assert = require('assert');
-const { clamp01, computeCenterBounds, endBias, extractEmphasisToken, parseScriptLines, stripControlTokens, normalizeProfileToken, visibleHalfWidth, requiredDistanceForSpan } = require('../public/animation-helpers');
+const { clamp01, computeCenterBounds, endBias, extractEmphasisToken, parseScriptLines, stripControlTokens, normalizeProfileToken, visibleHalfWidth, requiredDistanceForSpan, sanitizePersistedState } = require('../public/animation-helpers');
 
 function testClamp01() {
   assert.strictEqual(clamp01(-1), 0);
@@ -151,6 +151,16 @@ function testRequiredDistanceForSpan() {
   assert.strictEqual(tighter, base, 'small spans should use base distance');
 }
 
+function testSanitizePersistedState() {
+  const defaults = { num: 1, flag: false, text: 'hi', ignored: 5 };
+  const stored = { num: '2.5', flag: 'true', text: 99, extra: 'drop' };
+  const cleaned = sanitizePersistedState(defaults, stored);
+  assert.deepStrictEqual(cleaned, { num: 2.5, flag: true, text: '99' });
+
+  const empty = sanitizePersistedState(defaults, null);
+  assert.deepStrictEqual(empty, {});
+}
+
 function run() {
   testClamp01();
   testComputeCenterBounds();
@@ -162,6 +172,7 @@ function run() {
   testNormalizeProfileToken();
   testVisibleHalfWidth();
   testRequiredDistanceForSpan();
+  testSanitizePersistedState();
   console.log('animation-helpers: all tests passed');
 }
 

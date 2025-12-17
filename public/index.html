@@ -343,26 +343,26 @@
     cameraDistance: 3.5,
 
     wordsPerSecond:  2.5,
-    curveLookAheadU: 0.055,
-    followLambda:    16,
-    lookAtLambda:    11,
+    curveLookAheadU: 0.045,
+    followLambda:    13.5,
+    lookAtLambda:    9.5,
     revealWordLead:  1.15,
 
-    spaceMultiplier: 1.68,
+    spaceMultiplier: 1.82,
 
-    revealMs:         220,
-    revealStartScale: 0.92,
-    revealPopScale:   1.16,
-    revealRise:       0.05,
-    revealZ:          0.06,
-    revealOvershoot:  0.06,
+    revealMs:         240,
+    revealStartScale: 0.95,
+    revealPopScale:   1.12,
+    revealRise:       0.045,
+    revealZ:          0.05,
+    revealOvershoot:  0.04,
     revealStyle:      'rise',
 
     emphasisProfile:  'documentary',
 
     endOverhangFactor: 0.65,
     endOverhangPx:     0.16,
-    trackLeadPx:       0.08,
+    trackLeadPx:       0.06,
     endOverhangBlendU: 0.10,
     endEaseOutU:       0.14,
 
@@ -380,6 +380,9 @@
     stackAnchor: 'bottom',
     stackMaxLines: 6
   });
+
+  const STORAGE_KEY = 'captioner_state_v1';
+  const STORAGE_SEED_URLS = ['./localStorage.json', './alternate-test-versions/localStorage.json'];
 
   const DEFAULT_LINE_PROFILE_ID = 'default';
 
@@ -621,7 +624,10 @@
     setUiCollapsed(true);
   }
 
-  wplEl.addEventListener('input', () => { wplValEl.textContent = String(wplEl.value); });
+  wplEl.addEventListener('input', () => {
+    wplValEl.textContent = String(wplEl.value);
+    persistState();
+  });
 
   ohEl.value = String(cfg.endOverhangFactor);
   ohValEl.textContent = Number(cfg.endOverhangFactor).toFixed(2);
@@ -630,11 +636,13 @@
     const v = Number(ohEl.value);
     cfg.endOverhangFactor = v;
     ohValEl.textContent = v.toFixed(2);
+    persistState();
   });
 
   keepPrevEl.addEventListener('change', () => {
     cfg.keepPreviousLinesVisible = !!keepPrevEl.checked;
     setStatus('Applied keepPreviousLinesVisible: ' + cfg.keepPreviousLinesVisible + '\n(Rebuild on Replay)');
+    persistState();
   });
 
   function populateFontPresets() {
@@ -676,27 +684,100 @@
     cfg.fontId = fontSelect.value;
     if (preset && preset.url) fontUrlInput.value = preset.url;
     if (preset && preset.format) cfg.fontFormat = preset.format;
+    cfg.fontUrl = fontUrlInput.value.trim() || cfg.fontUrl;
+    persistState();
   });
 
   fontUrlInput.addEventListener('input', () => {
     if (fontSelect.value === 'custom') {
       cfg.fontUrl = fontUrlInput.value.trim();
+      persistState();
     }
   });
 
   revealStyleSelect.addEventListener('change', () => {
     cfg.revealStyle = revealStyleSelect.value;
     setStatus('Reveal style set to: ' + cfg.revealStyle + '\n(Rebuild on Replay)');
+    persistState();
   });
 
   emphasisProfileSelect.addEventListener('change', () => {
     cfg.emphasisProfile = emphasisProfileSelect.value;
     setStatus('Emphasis profile: ' + cfg.emphasisProfile + '\n(Semantic + terminal rules stacked)');
+    persistState();
   });
 
   cfgDetails.addEventListener('toggle', () => {
     cfgPill.textContent = cfgDetails.open ? 'expanded' : 'collapsed';
   });
+
+  // -------------------------
+  // Persistence
+  // -------------------------
+  function readLocalState() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      return parsed?.captioner_state_v1 || parsed;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  async function fetchSeedState() {
+    for (const url of STORAGE_SEED_URLS) {
+      try {
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) continue;
+        const data = await res.json();
+        const payload = data?.captioner_state_v1 || data;
+        if (payload && typeof payload === 'object') return payload;
+      } catch (_) { /* ignore */ }
+    }
+    return null;
+  }
+
+  function persistState() {
+    try {
+      const payload = {
+        cfg: sanitizePersistedState(DEFAULT_CFG, cfg),
+        wpl: Number(wplEl?.value ?? 0) || 0,
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+    } catch (_) {}
+  }
+
+  function applyPersistedState(payload) {
+    if (!payload || typeof payload !== 'object') return;
+    const cfgPatch = sanitizePersistedState(DEFAULT_CFG, payload.cfg || payload);
+    Object.assign(cfg, cfgPatch);
+
+    if (typeof payload.wpl === 'number' && isFinite(payload.wpl)) {
+      wplEl.value = String(payload.wpl);
+      wplValEl.textContent = String(payload.wpl);
+    } else {
+      wplValEl.textContent = String(wplEl.value);
+    }
+
+    ohEl.value = String(cfg.endOverhangFactor);
+    ohValEl.textContent = Number(cfg.endOverhangFactor).toFixed(2);
+    keepPrevEl.checked = !!cfg.keepPreviousLinesVisible;
+    fontSelect.value = cfg.fontId;
+    fontUrlInput.value = cfg.fontUrl;
+    revealStyleSelect.value = cfg.revealStyle;
+    emphasisProfileSelect.value = cfg.emphasisProfile;
+  }
+
+  async function hydrateState() {
+    const stored = readLocalState();
+    if (stored) { applyPersistedState(stored); return; }
+    const seeded = await fetchSeedState();
+    if (seeded) {
+      applyPersistedState(seeded);
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded)); } catch (_) {}
+    }
+  }
 
   // -------------------------
   // Helpers
@@ -721,6 +802,28 @@
     const cleanText = String(wordText).replace(/\*\*/g, '') || String(wordText || '').trim();
     return { cleanText, isEmphasized };
   }
+  const sanitizePersistedState = (window.AnimationHelpers && typeof window.AnimationHelpers.sanitizePersistedState === 'function')
+    ? window.AnimationHelpers.sanitizePersistedState
+    : function fallbackSanitize(defaults = {}, stored = {}) {
+        const base = (defaults && typeof defaults === 'object') ? defaults : {};
+        const src = (stored && typeof stored === 'object') ? stored : {};
+        const out = {};
+        for (const [key, defVal] of Object.entries(base)) {
+          if (!(key in src)) continue;
+          const val = src[key];
+          if (typeof defVal === 'number') {
+            const num = Number(val);
+            if (isFinite(num)) out[key] = num;
+          } else if (typeof defVal === 'boolean') {
+            if (typeof val === 'boolean') out[key] = val;
+            else if (typeof val === 'string') out[key] = val.toLowerCase() === 'true';
+            else if (typeof val === 'number') out[key] = !!val;
+          } else if (typeof defVal === 'string') {
+            if (val !== undefined && val !== null) out[key] = String(val);
+          }
+        }
+        return out;
+      };
   function emphasisScaleFor(mesh, elapsedMs, profile) {
     if (!mesh?.userData?.emphasis || !profile) return 1;
     const settleMs = Math.max(0, profile.emphasisSettleMs ?? 0);
@@ -1032,26 +1135,27 @@
     const elapsed = now - t0;
     const t = clamp01(elapsed / cfg.revealMs);
     const profile = getEmphasisProfile();
-    const opacityEase = smooth01(t);
-    mesh.material.opacity = Math.min(1, opacityEase * 1.08);
+    const easeIn = smooth01(t);
+    const opacityEase = easeOutCubic(easeIn);
+    mesh.material.opacity = Math.min(1, 0.1 + opacityEase * 0.95);
 
     const startScale = mesh.userData.revealStartScale ?? cfg.revealStartScale;
     const rise = mesh.userData.revealOffsetY ?? 0;
     const depth = mesh.userData.revealOffsetZ ?? 0;
 
-    const soft = smooth01(t);
-    const settleEase = easeOutCubic(t);
-    const peak = 1 + Math.max(0, cfg.revealOvershoot || 0) * (1 - settleEase) * 0.55;
-    const styleScale = THREE.MathUtils.lerp(startScale, peak, soft);
+    const liftEase = easeOutCubic(easeIn);
+    const backEase = easeOutBack(easeIn, Math.max(0, cfg.revealOvershoot || 0));
+    const styleScale = THREE.MathUtils.lerp(startScale, cfg.revealPopScale, backEase);
+    const settleScale = THREE.MathUtils.lerp(styleScale, 1, liftEase);
 
     mesh.position.set(
       mesh.userData.basePos.x,
-      mesh.userData.basePos.y + rise * (1 - soft),
-      mesh.userData.basePos.z + depth * (1 - soft)
+      mesh.userData.basePos.y + rise * (1 - liftEase),
+      mesh.userData.basePos.z + depth * (1 - liftEase)
     );
 
     const emScale = emphasisScaleFor(mesh, elapsed, profile);
-    mesh.scale.setScalar(styleScale * emScale);
+    mesh.scale.setScalar(settleScale * emScale);
 
     if (t >= 1) {
       mesh.userData.revealStart = null;
@@ -1250,7 +1354,7 @@
       const activeProgress = (typeof activeIdx === 'number' && activeIdx >= 0)
         ? clamp01(activeIdx / Math.max(1, n - 1))
         : 0;
-      const adjustedLookAhead = lookAheadU * (0.45 + 0.35 * activeProgress);
+      const adjustedLookAhead = lookAheadU * (0.32 + 0.28 * activeProgress);
       const t2 = Math.min(1, t + adjustedLookAhead);
       const isEmphasis = activeIdx >= 0 && Array.isArray(emphasisFlags) && emphasisFlags[activeIdx];
       const isTerminal = activeIdx === (n - 1);
@@ -1390,7 +1494,7 @@
       const activeProgress = (typeof activeIdx === 'number' && activeIdx >= 0)
         ? clamp01(activeIdx / Math.max(1, n - 1))
         : 0;
-      const adjustedLookAhead = lookAheadU * (0.45 + 0.35 * activeProgress);
+      const adjustedLookAhead = lookAheadU * (0.32 + 0.28 * activeProgress);
       const t2 = Math.min(1, t + adjustedLookAhead);
 
       const isEmphasis = activeIdx >= 0 && Array.isArray(emphasisFlags) && emphasisFlags[activeIdx];
@@ -1768,6 +1872,8 @@
 
     baseMat = createBaseMaterial();
 
+    persistState();
+
     return true;
   }
 
@@ -1785,6 +1891,7 @@
     ohEl.value = String(cfg.endOverhangFactor);
     ohValEl.textContent = Number(cfg.endOverhangFactor).toFixed(2);
     setStatus('cfg reset to defaults.\n(Rebuild on Replay)');
+    persistState();
   }
 
   cfgResetBtn.addEventListener('click', () => resetCfgInputs());
@@ -1811,6 +1918,7 @@
       await loadFontFromSelection();
       setStatus('cfg + font applied.\nRebuilding scene…');
       await rebuildSceneFromCurrentSource();
+      persistState();
       setStatus('cfg applied + rebuilt.\nReplaying…');
       replay();
     } catch (err) {
@@ -1876,13 +1984,18 @@
   // -------------------------
   // Boot
   // -------------------------
-  buildCfgEditorUI();
-  populateFontPresets();
-  populateRevealStyles();
-  populateEmphasisProfiles();
-  keepPrevEl.checked = !!cfg.keepPreviousLinesVisible;
+  async function boot() {
+    buildCfgEditorUI();
+    populateFontPresets();
+    populateRevealStyles();
+    populateEmphasisProfiles();
+    keepPrevEl.checked = !!cfg.keepPreviousLinesVisible;
+    wplValEl.textContent = String(wplEl.value);
 
-  loadFontFromSelection().then(async (font) => {
+    await hydrateState();
+
+    const font = await loadFontFromSelection();
+
     // try Resolve first (silent)
     const data = await loadTranscriptionFromResolve();
     if (data && !data.error && Array.isArray(data.words) && data.words.length) {
@@ -1898,20 +2011,18 @@
     }
 
     // fallback to demo-lines.txt
-    try {
-      const lines = await loadLines(cfg.linesUrl);
-      buildFromPlainLines(font, lines);
+    const lines = await loadLines(cfg.linesUrl);
+    buildFromPlainLines(font, lines);
 
-      camera.position.set(0, 0, cfg.cameraDistance);
-      camera.lookAt(new THREE.Vector3(0,0,0));
-      render();
+    camera.position.set(0, 0, cfg.cameraDistance);
+    camera.lookAt(new THREE.Vector3(0,0,0));
+    render();
 
-      setStatus(`Loaded fallback demo-lines.txt\nLines: ${lines.length}`);
-      replay();
-    } catch (e) {
-      setStatus(`Boot error:\n${String(e)}`);
-    }
-  }).catch((err) => setStatus('Font load failed: ' + String(err)));
+    setStatus(`Loaded fallback demo-lines.txt\nLines: ${lines.length}`);
+    replay();
+  }
+
+  boot().catch((err) => setStatus('Boot error: ' + String(err)));
 
   // -------------------------
   // Resize

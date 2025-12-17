@@ -143,24 +143,24 @@ const cfg = {
 
   // Animation timing
   wordsPerSecond: 2.5,
-  curveLookAheadU: 0.055,
-  followLambda: 16,
-  lookAtLambda: 11,
+  curveLookAheadU: 0.045,
+  followLambda: 13.5,
+  lookAtLambda: 9.5,
   revealWordLead: 1.15,
 
   // Reveal animation
-  revealMs: 220,
-  revealStartScale: 0.92,
-  revealPopScale: 1.16,
-  revealRise: 0.05,
-  revealZ: 0.06,
-  revealOvershoot: 0.06,
+  revealMs: 240,
+  revealStartScale: 0.95,
+  revealPopScale: 1.12,
+  revealRise: 0.045,
+  revealZ: 0.05,
+  revealOvershoot: 0.04,
   revealStyle: 'rise', // 'rise' or 'grow-up'
 
   emphasisProfile: 'documentary', // documentary (stacked emphasis) or minimal
 
   // Spacing & stacking
-  spaceMultiplier: 1.68,
+  spaceMultiplier: 1.82,
   keepPreviousLinesVisible: false,
   lineHoldMsAfterComplete: 620,
   stackLines: true,
@@ -171,11 +171,15 @@ const cfg = {
   // Camera end bias
   endOverhangFactor: 0.65,
   endOverhangPx: 0.16,
-  trackLeadPx: 0.08,
+  trackLeadPx: 0.06,
   endOverhangBlendU: 0.10,
   endEaseOutU: 0.14,
 };
 ```
+
+All UI-configurable values now persist to `localStorage` under the `captioner_state_v1` key. If you want to ship tuned defaults
+with the demo, update `public/alternate-test-versions/localStorage.json`; the app seeds `localStorage` from that file when no
+prior state exists.
 
 You can switch fonts via presets (Akira Expanded, Impact, Inter Black via CDN, Apple Garamond Regular/Italic, or a custom URL) and swap reveal styles between the default rise and the grow-from-below effect directly in the UI.
 

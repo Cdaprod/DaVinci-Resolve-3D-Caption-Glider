@@ -86,6 +86,32 @@
     return { text: out.trim(), pauseMs, holdMs };
   }
 
+  function sanitizePersistedState(defaults = {}, stored = {}) {
+    const base = (defaults && typeof defaults === 'object') ? defaults : {};
+    const src = (stored && typeof stored === 'object') ? stored : {};
+    const out = {};
+
+    for (const [key, defVal] of Object.entries(base)) {
+      if (!(key in src)) continue;
+      const val = src[key];
+
+      if (typeof defVal === 'number') {
+        const num = Number(val);
+        if (isFinite(num)) out[key] = num;
+      } else if (typeof defVal === 'boolean') {
+        if (typeof val === 'boolean') out[key] = val;
+        else if (typeof val === 'string') out[key] = val.toLowerCase() === 'true';
+        else if (typeof val === 'number') out[key] = !!val;
+      } else if (typeof defVal === 'string') {
+        if (val !== undefined && val !== null) out[key] = String(val);
+      } else if (val !== undefined) {
+        out[key] = val;
+      }
+    }
+
+    return out;
+  }
+
   function normalizeProfileToken(token = '') {
     const trimmed = String(token || '').trim();
     if (!trimmed) return 'default';
@@ -146,6 +172,7 @@
     visibleHalfWidth,
     requiredDistanceForSpan,
     extractEmphasisToken,
+    sanitizePersistedState,
     parseScriptLines,
     stripControlTokens,
     normalizeProfileToken,

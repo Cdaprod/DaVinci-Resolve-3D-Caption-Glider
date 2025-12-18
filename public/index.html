@@ -1083,6 +1083,7 @@ ${String(err)}`);
     const group = new THREE.Group();
     const isCanvasFont = !!font?.isCanvasFont;
     const spaceW = getSpaceAdvance(font) * cfg.spaceMultiplier;
+    const layoutScale = Math.max(1, cfg.revealPopScale || 1, (getEmphasisProfile()?.emphasisScale || 1));
 
     const source = Array.isArray(wordMeta) && wordMeta.length
       ? wordMeta.map(w => ({ ...w, text: String(w?.text ?? '').trim() }))
@@ -1097,7 +1098,7 @@ ${String(err)}`);
       normalizedWords.push({ ...entry, text: cleanText, emphasis: isEmphasized });
       if (isCanvasFont) {
         const canvasWord = createCanvasWordMesh(cleanText, isEmphasized);
-        return { meshOverride: canvasWord.mesh, width: canvasWord.worldWidth, textLen: cleanText.length };
+        return { meshOverride: canvasWord.mesh, width: canvasWord.worldWidth * layoutScale, textLen: cleanText.length };
       }
 
       const geom = new THREE.TextGeometry(cleanText, {
@@ -1109,14 +1110,14 @@ ${String(err)}`);
       geom.computeBoundingBox();
       const bb = geom.boundingBox;
 
-      const width = bb.max.x - bb.min.x;
+      const width = (bb.max.x - bb.min.x) * layoutScale;
       geom.translate(-bb.min.x, 0, 0);
       return { geom, width, textLen: cleanText.length };
     }).filter(Boolean);
 
     const totalW =
       parsedWords.reduce((s,d)=>s+d.width,0) +
-      (parsedWords.length - 1) * spaceW;
+      (parsedWords.length - 1) * spaceW * layoutScale;
 
     let cursorX = -totalW / 2;
 

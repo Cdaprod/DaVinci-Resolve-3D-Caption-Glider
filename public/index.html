@@ -1191,12 +1191,8 @@ ${String(err)}`);
         return { meshOverride: canvasWord.mesh, width: canvasWord.worldWidth * layoutScale, textLen: cleanText.length };
       }
 
-      const geom = new THREE.TextGeometry(cleanText, {
-        font,
-        size: cfg.textSize,
-        height: cfg.textDepth,
-        curveSegments: 2
-      });
+      const geomSpec = AnimationHelpers.buildTextGeometrySpec(cfg.textSize, cfg.textDepth);
+      const geom = new THREE.TextGeometry(cleanText, { font, ...geomSpec });
       geom.computeBoundingBox();
       const bb = geom.boundingBox;
 

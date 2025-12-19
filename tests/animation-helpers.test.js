@@ -5,7 +5,7 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
-const { clamp01, computeCenterBounds, endBias, extractEmphasisToken, parseScriptLines, stripControlTokens, normalizeProfileToken, visibleHalfWidth, requiredDistanceForSpan, sanitizePersistedState, normalizePersistedPayload } = require('../public/animation-helpers');
+const { clamp01, computeCenterBounds, endBias, extractEmphasisToken, parseScriptLines, stripControlTokens, normalizeProfileToken, visibleHalfWidth, requiredDistanceForSpan, sanitizePersistedState, normalizePersistedPayload, buildTextGeometrySpec } = require('../public/animation-helpers');
 
 function testClamp01() {
   assert.strictEqual(clamp01(-1), 0);
@@ -180,6 +180,20 @@ function testRequiredDistanceForSpan() {
   assert.strictEqual(tighter, base, 'small spans should use base distance');
 }
 
+function testBuildTextGeometrySpec() {
+  const thin = buildTextGeometrySpec(0.1, 0.001);
+  assert.strictEqual(thin.bevelEnabled, false);
+  assert(thin.curveSegments >= 4 && thin.curveSegments <= 12);
+  assert.strictEqual(thin.height, 0.001);
+
+  const deep = buildTextGeometrySpec(0.1, 0.006);
+  assert.strictEqual(deep.bevelEnabled, true);
+  assert(deep.bevelSize > 0);
+  assert(deep.bevelThickness > 0);
+  assert(deep.bevelThickness <= 0.02);
+  assert(deep.bevelSegments >= 3);
+}
+
 function testSanitizePersistedState() {
   const defaults = { num: 1, flag: false, text: 'hi', ignored: 5 };
   const stored = { num: '2.5', flag: 'true', text: 99, extra: 'drop' };
@@ -265,6 +279,7 @@ function run() {
   testNormalizeProfileToken();
   testVisibleHalfWidth();
   testRequiredDistanceForSpan();
+  testBuildTextGeometrySpec();
   testSanitizePersistedState();
   testNormalizePersistedPayload();
   testSeedFilesAreCleanObjects();

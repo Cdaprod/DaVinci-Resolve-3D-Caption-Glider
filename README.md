@@ -181,6 +181,9 @@ All UI-configurable values now persist to `localStorage` under the `captioner_st
 with the demo, update `public/localStorage.json` (and optionally keep `public/alternate-test-versions/localStorage.json` in sync);
 the app seeds `localStorage` from those files when no prior state exists.
 
+Text geometry now auto-enables a subtle bevel and higher curve segments when `textDepth` is raised (via `buildTextGeometrySpec`)
+ so deeper extrusions (for example, `textDepth: 0.005`) keep crisp front edges instead of smushing letters together.
+
 You can switch fonts via presets (Akira Expanded, Impact, Inter Black via CDN, Apple Garamond Regular/Italic, or a custom URL) and choose a reveal style in the UI: **slide-up** (default), **grow-up**, **bloom**, **fade-scale**, **word fade**, **character fade**, or **typewriter** (left-anchored sweep).
 
 Use the **Background theme** dropdown to flip between light (default: white background, black text) and dark (black background, white text). The current theme, colors, and other UI settings persist to `localStorage` alongside your other cfg tweaks.

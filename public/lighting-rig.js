@@ -22,14 +22,28 @@
   };
 
   const MATERIAL_SPEC = {
-    metalness: 0.05,
-    roughness: 0.44,
-    emissiveScalar: 0.18,
+    metalness: 0.06,
+    roughness: 0.5,
+    emissiveScalar: 0.14,
     emphasis: {
-      emissiveScalar: 0.35,
-      roughness: 0.38,
+      emissiveScalar: 0.28,
+      roughness: 0.42,
     },
   };
+
+  function clampColorFloor(hex, floor = 0x0a) {
+    const r = Math.max((hex >> 16) & 0xff, floor);
+    const g = Math.max((hex >> 8) & 0xff, floor);
+    const b = Math.max(hex & 0xff, floor);
+    return (r << 16) | (g << 8) | b;
+  }
+
+  function luminance(hex) {
+    const r = (hex >> 16) & 0xff;
+    const g = (hex >> 8) & 0xff;
+    const b = hex & 0xff;
+    return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  }
 
   function getLightingSpec() {
     return JSON.parse(JSON.stringify(LIGHTING_SPEC));
@@ -44,10 +58,17 @@
     const emissiveScalar = emphasis ? MATERIAL_SPEC.emphasis.emissiveScalar : MATERIAL_SPEC.emissiveScalar;
     const roughness = emphasis ? MATERIAL_SPEC.emphasis.roughness : MATERIAL_SPEC.roughness;
 
+    const safeColor = clampColorFloor(typeof colorHex === 'number' ? colorHex : 0xffffff, 0x0a);
+    const lumin = luminance(safeColor);
+    const needsLift = lumin < 0.05;
+
+    const emissiveColor = needsLift ? clampColorFloor(safeColor, 0x18) : safeColor;
+    const emissiveIntensity = needsLift ? emissiveScalar + 0.08 : emissiveScalar;
+
     return {
-      color: colorHex,
-      emissive: colorHex,
-      emissiveIntensity: emissiveScalar,
+      color: safeColor,
+      emissive: emissiveColor,
+      emissiveIntensity,
       metalness: MATERIAL_SPEC.metalness,
       roughness,
       transparent: true,
@@ -89,16 +110,23 @@
 
     scene.add(lights.ambient);
     scene.add(lights.hemi);
-    camera.add(lights.key);
-    camera.add(lights.fill);
+    scene.add(lights.key);
+    scene.add(lights.fill);
     scene.add(lights.rim);
 
     function updatePalette(nextPalette) {
       const bg = nextPalette?.background;
       if (typeof bg === 'number') {
-        const darkness = Math.max(0, Math.min(1, bg === 0 ? 1 : (0xffffff - bg) / 0xffffff));
+        const lightness = luminance(bg);
+        const ambientScale = lightness > 0.6 ? 0.72 : 1;
+        const hemiScale = lightness > 0.6 ? 0.8 : 1.05;
+        const dirScale = lightness > 0.6 ? 0.92 : 1;
+
         lights.hemi.groundColor.setHex(bg);
-        lights.hemi.intensity = spec.hemi.intensity * (0.8 + 0.4 * darkness);
+        lights.hemi.intensity = spec.hemi.intensity * hemiScale;
+        lights.ambient.intensity = spec.ambient.intensity * ambientScale;
+        lights.key.intensity = spec.key.intensity * dirScale;
+        lights.fill.intensity = spec.fill.intensity * dirScale;
       }
     }
 

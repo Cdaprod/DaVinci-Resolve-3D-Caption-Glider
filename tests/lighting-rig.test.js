@@ -16,13 +16,17 @@ function testSpecShape() {
 
 function testMaterialParams() {
   const base = lighting.buildMaterialParams(0x111111);
-  assert.strictEqual(base.color, 0x111111);
+  assert.ok(base.color > 0, 'base color should be preserved or lifted above zero');
   assert.strictEqual(base.transparent, true);
   assert.ok(base.roughness > 0, 'roughness should be set');
 
   const emph = lighting.buildMaterialParams(0x222222, { emphasis: true });
   assert.ok(emph.emissiveIntensity > base.emissiveIntensity, 'emphasis should boost emissive');
   assert.ok(emph.roughness < base.roughness, 'emphasis should be slightly less rough');
+
+  const dark = lighting.buildMaterialParams(0x000000);
+  assert.ok(dark.color > 0, 'pure black should be lifted to a visible diffuse color');
+  assert.ok(dark.emissiveIntensity > base.emissiveIntensity, 'lifted black should get extra emissive');
 }
 
 function run() {

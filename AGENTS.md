@@ -21,3 +21,4 @@ This file applies to the entire repository.
 - Emphasis visibility relies on semantic bold plus the glow/scale defaults; adjust materials/emphasis values and documentation together so bold words remain visually distinct.
 - Reveal styles are enumerated (slide-up, grow-up, bloom, fade-scale, word-fade, char-fade, typewriter); keep the dropdown, defaults, and seed values in sync, and normalize legacy `rise` to `slide-up` for backward compatibility.
 - The shared lighting rig lives in `public/lighting-rig.js` and is tested; adjust light/material specs there and keep the rig tests in sync when retuning shading or palette-dependent behavior.
+- The lighting rig now anchors key/fill lights to the scene and lifts near-black text colors for readability; keep palette updates and the rig tests aligned when tuning emissive/roughness values.

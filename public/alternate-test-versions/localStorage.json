@@ -4,8 +4,8 @@
     "cfg": {
       "fontId": "helvetiker",
       "fontUrl": "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/fonts/helvetiker_regular.typeface.json",
-      "theme": "dark",
-      "backgroundColor": 0,
+      "theme": "light",
+      "backgroundColor": 16777215,
       "spaceMultiplier": 1.82,
       "curveLookAheadU": 0.045,
       "followLambda": 13.5,
@@ -23,7 +23,7 @@
       "stackMaxLines": 6,
       "paragraphGap": 0.32,
       "textDepth": 0.001,
-      "color": 16777215
+      "color": 0
     },
     "wpl": 8
   }

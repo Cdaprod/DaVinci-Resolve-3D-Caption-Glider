@@ -221,6 +221,38 @@ function testSeedFilesAreCleanObjects() {
   }
 }
 
+function testSeedThemesMatchPalettes() {
+  const seeds = [
+    path.join(__dirname, '..', 'public', 'localStorage.json'),
+    path.join(__dirname, '..', 'public', 'alternate-test-versions', 'localStorage.json'),
+  ];
+
+  const palettes = {
+    light: { backgroundColor: 0xffffff, color: 0x000000 },
+    dark:  { backgroundColor: 0x000000, color: 0xffffff },
+  };
+
+  for (const seedPath of seeds) {
+    if (!fs.existsSync(seedPath)) continue;
+    const data = JSON.parse(fs.readFileSync(seedPath, 'utf8'));
+    const cfg = data?.captioner_state_v1?.cfg;
+    if (!cfg || typeof cfg.theme !== 'string') continue;
+    const palette = palettes[cfg.theme];
+    if (!palette) continue;
+
+    assert.strictEqual(
+      cfg.backgroundColor,
+      palette.backgroundColor,
+      `${seedPath} backgroundColor should match ${cfg.theme} palette`
+    );
+    assert.strictEqual(
+      cfg.color,
+      palette.color,
+      `${seedPath} color should match ${cfg.theme} palette`
+    );
+  }
+}
+
 function run() {
   testClamp01();
   testComputeCenterBounds();
@@ -236,6 +268,7 @@ function run() {
   testSanitizePersistedState();
   testNormalizePersistedPayload();
   testSeedFilesAreCleanObjects();
+  testSeedThemesMatchPalettes();
   console.log('animation-helpers: all tests passed');
 }
 

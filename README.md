@@ -183,7 +183,7 @@ the app seeds `localStorage` from those files when no prior state exists.
 
 You can switch fonts via presets (Akira Expanded, Impact, Inter Black via CDN, Apple Garamond Regular/Italic, or a custom URL) and choose a reveal style in the UI: **slide-up** (default), **grow-up**, **bloom**, **fade-scale**, **word fade**, **character fade**, or **typewriter** (left-anchored sweep).
 
-Use the **Background theme** dropdown to flip between dark (black background, white text) and light (white background, near-black text). The current theme, colors, and other UI settings persist to `localStorage` alongside your other cfg tweaks.
+Use the **Background theme** dropdown to flip between light (default: white background, black text) and dark (black background, white text). The current theme, colors, and other UI settings persist to `localStorage` alongside your other cfg tweaks.
 
 Use **bold** markers in your transcript or fallback lines to flag semantic emphasis. The default “Documentary” emphasis profile stacks semantic emphasis (scale 1.08 with a 260ms settle and +120ms hold) with terminal-word cadence (+0.45× word-width drift and +300ms hold) so bold last words land with a gentle overhang. Active words now receive a per-frame glow/scale lift (with softened neighbor glow) so emphasis stays visible as the camera glides through each line. A “Minimal” profile is also available for a lighter touch.
 

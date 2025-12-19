@@ -344,9 +344,9 @@
     textSize:  0.10,
     textDepth: 0.001,
 
-    theme: 'dark',
-    backgroundColor: 0x000000,
-    color:     0xffffff,
+    theme: 'light',
+    backgroundColor: 0xffffff,
+    color:     0x000000,
     cameraDistance: 3.5,
 
     wordsPerSecond:  2.5,
@@ -508,8 +508,8 @@
   ];
 
   const THEME_OPTIONS = [
+    { id: 'light', label: 'Light (white bg, black text)', background: 0xffffff, text: 0x000000 },
     { id: 'dark', label: 'Dark (black bg, white text)', background: 0x000000, text: 0xffffff },
-    { id: 'light', label: 'Light (white bg, black text)', background: 0xffffff, text: 0x111111 },
   ];
 
   const EMPHASIS_PROFILE_OPTIONS = [
@@ -557,7 +557,7 @@
   renderer.setSize(window.innerWidth, window.innerHeight);
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x000000);
+  scene.background = new THREE.Color(cfg.backgroundColor);
 
   const camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.05, 200);
   scene.add(camera);
@@ -2176,7 +2176,7 @@ ${String(err)}`);
 
     baseMat = createBaseMaterial();
 
-    const bg = new THREE.Color(cfg.backgroundColor ?? 0x000000);
+    const bg = new THREE.Color(cfg.backgroundColor ?? DEFAULT_CFG.backgroundColor ?? 0x000000);
     scene.background = bg.clone();
     renderer.setClearColor(bg, 1);
     document.body.style.background = `#${bg.getHexString()}`;

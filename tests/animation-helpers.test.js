@@ -5,12 +5,39 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
-const { clamp01, computeCenterBounds, endBias, extractEmphasisToken, parseScriptLines, stripControlTokens, normalizeProfileToken, visibleHalfWidth, requiredDistanceForSpan, sanitizePersistedState, normalizePersistedPayload, buildTextGeometrySpec, TYPOGRAPHY_PROFILES, DEFAULT_TYPOGRAPHY_PROFILE_ID, applyTypographyProfile } = require('../public/animation-helpers');
+const {
+  clamp01,
+  computeCenterBounds,
+  endBias,
+  extractEmphasisToken,
+  parseScriptLines,
+  stripControlTokens,
+  normalizeProfileToken,
+  visibleHalfWidth,
+  requiredDistanceForSpan,
+  sanitizePersistedState,
+  normalizePersistedPayload,
+  buildTextGeometrySpec,
+  TYPOGRAPHY_PROFILES,
+  DEFAULT_TYPOGRAPHY_PROFILE_ID,
+  applyTypographyProfile,
+  isValidFontResource,
+} = require('../public/animation-helpers');
 
 function testClamp01() {
   assert.strictEqual(clamp01(-1), 0);
   assert.strictEqual(clamp01(0.5), 0.5);
   assert.strictEqual(clamp01(2), 1);
+}
+
+function testIsValidFontResource() {
+  const valid = { data: { glyphs: { ' ': { ha: 20 } }, resolution: 512 } };
+  assert.strictEqual(isValidFontResource(valid), true);
+
+  assert.strictEqual(isValidFontResource(null), false);
+  assert.strictEqual(isValidFontResource({}), false);
+  assert.strictEqual(isValidFontResource({ data: { glyphs: {} } }), false);
+  assert.strictEqual(isValidFontResource({ data: { glyphs: {}, resolution: 'bad' } }), false);
 }
 
 function testComputeCenterBounds() {
@@ -285,6 +312,7 @@ function testSeedThemesMatchPalettes() {
 
 function run() {
   testClamp01();
+  testIsValidFontResource();
   testComputeCenterBounds();
   testEndBias();
   testExtractEmphasisToken();

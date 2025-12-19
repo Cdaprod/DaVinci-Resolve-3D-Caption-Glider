@@ -1169,6 +1169,8 @@
 
     try {
       const font = await loadFontResource(candidateUrl, fmt);
+      const isValid = AnimationHelpers.isValidFontResource(font);
+      if (!isValid) throw new Error('font resource missing glyph data/resolution');
       fontRef = font;
       setStatus(`Loaded font: ${preset?.label ?? cfg.fontId}\nFormat: ${fmt}`);
       return font;
@@ -1193,7 +1195,7 @@ ${String(err)}`);
   }
 
   function getSpaceAdvance(font) {
-    if (font?.data?.glyphs) {
+    if (AnimationHelpers.isValidFontResource(font) && font?.data?.glyphs) {
       const glyph = font.data.glyphs[' '] ?? null;
       const ha = (glyph && typeof glyph.ha === 'number') ? glyph.ha : 20;
       const scale = cfg.textSize / (font.data?.resolution || 1000);
@@ -1236,7 +1238,8 @@ ${String(err)}`);
 
   function buildLine(font, lineText, wordMeta) {
     const group = new THREE.Group();
-    const isCanvasFont = !!font?.isCanvasFont;
+    const hasValidFont = AnimationHelpers.isValidFontResource(font);
+    const isCanvasFont = !!font?.isCanvasFont || !hasValidFont;
     const spaceW = getSpaceAdvance(font) * cfg.spaceMultiplier;
     const layoutScale = Math.max(1, cfg.revealPopScale || 1, (getEmphasisProfile()?.emphasisScale || 1));
 

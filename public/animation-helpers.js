@@ -52,6 +52,15 @@
     return current + (target - current) * (1 - Math.exp(-lambda * dt));
   }
 
+  function isValidFontResource(font) {
+    if (!font || typeof font !== 'object') return false;
+    const data = font.data;
+    if (!data || typeof data !== 'object') return false;
+    const hasGlyphs = !!data.glyphs && typeof data.glyphs === 'object';
+    const hasResolution = typeof data.resolution === 'number' && isFinite(data.resolution);
+    return hasGlyphs && hasResolution;
+  }
+
   function computeCenterBounds(centers) {
     let minX = Infinity;
     let maxX = -Infinity;
@@ -280,6 +289,7 @@
     easeOutCubic,
     easeOutBack,
     damp,
+    isValidFontResource,
     computeCenterBounds,
     endBias,
     visibleHalfWidth,

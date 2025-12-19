@@ -281,15 +281,25 @@
       <small>Used when "Custom URL" is selected. Requires CORS access.</small>
     </label>
 
-    <label>
-      Reveal style
-      <select id="revealStyle"></select>
-    </label>
+      <label>
+        Reveal style
+        <select id="revealStyle"></select>
+      </label>
 
-    <label>
-      Background theme
-      <select id="themeSelect"></select>
-    </label>
+      <label>
+        Line alignment
+        <select id="textAlign">
+          <option value="center">Center (default)</option>
+          <option value="left">Left</option>
+          <option value="right">Right</option>
+        </select>
+        <small>Anchor words left/center/right around the origin. Rebuild on Replay.</small>
+      </label>
+
+      <label>
+        Background theme
+        <select id="themeSelect"></select>
+      </label>
 
     <label>
       Emphasis profile
@@ -348,14 +358,15 @@
     fontUrl: 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/fonts/helvetiker_regular.typeface.json',
     fontFormat: 'typeface',
 
-    typographyProfile: (window.AnimationHelpers?.DEFAULT_TYPOGRAPHY_PROFILE_ID) || 'manual',
+      typographyProfile: (window.AnimationHelpers?.DEFAULT_TYPOGRAPHY_PROFILE_ID) || 'manual',
 
-    textSize:  0.10,
-    textDepth: 0.001,
+      textSize:  0.10,
+      textDepth: 0.001,
+      textAlign: 'center',
 
-    theme: 'light',
-    backgroundColor: 0xffffff,
-    color:     0x000000,
+      theme: 'light',
+      backgroundColor: 0xffffff,
+      color:     0x000000,
     cameraDistance: 3.5,
 
     wordsPerSecond:  2.5,
@@ -651,6 +662,7 @@
   const typographyProfileSelect = document.getElementById('typographyProfile');
   const fontUrlInput = document.getElementById('fontUrl');
   const revealStyleSelect = document.getElementById('revealStyle');
+  const textAlignSelect = document.getElementById('textAlign');
   const themeSelect = document.getElementById('themeSelect');
   const emphasisProfileSelect = document.getElementById('emphasisProfile');
   const keepPrevEl = document.getElementById('keepPrev');
@@ -733,21 +745,31 @@
     typographyProfileSelect.value = cfg.typographyProfile || DEFAULT_TYPOGRAPHY_PROFILE_ID;
   }
 
-  function populateRevealStyles() {
-    revealStyleSelect.innerHTML = '';
-    for (const p of REVEAL_STYLE_OPTIONS) {
-      const opt = document.createElement('option');
-      opt.value = p.id;
-      opt.textContent = p.label;
-      revealStyleSelect.appendChild(opt);
+    function populateRevealStyles() {
+      revealStyleSelect.innerHTML = '';
+      for (const p of REVEAL_STYLE_OPTIONS) {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = p.label;
+        revealStyleSelect.appendChild(opt);
+      }
+      revealStyleSelect.value = cfg.revealStyle;
     }
-    revealStyleSelect.value = cfg.revealStyle;
-  }
 
-  function populateThemes() {
-    themeSelect.innerHTML = '';
-    for (const t of THEME_OPTIONS) {
-      const opt = document.createElement('option');
+    function applyTextAlignSelection(value, { silent = false } = {}) {
+      const align = (AnimationHelpers.normalizeTextAlign?.(value)) || 'center';
+      cfg.textAlign = align;
+      textAlignSelect.value = align;
+      if (!silent) {
+        setStatus('Line alignment: ' + align + '\n(Rebuild on Replay)');
+      }
+      persistState();
+    }
+
+    function populateThemes() {
+      themeSelect.innerHTML = '';
+      for (const t of THEME_OPTIONS) {
+        const opt = document.createElement('option');
       opt.value = t.id;
       opt.textContent = t.label;
       themeSelect.appendChild(opt);
@@ -841,6 +863,10 @@
     persistState();
   });
 
+  textAlignSelect.addEventListener('change', () => {
+    applyTextAlignSelection(textAlignSelect.value);
+  });
+
   themeSelect.addEventListener('change', async () => {
     applyTheme(themeSelect.value);
     setStatus('Theme set to: ' + cfg.theme + '\n(Rebuilding scene for new materials…)');
@@ -900,12 +926,13 @@
 
   function applyPersistedState(payload) {
     if (!payload || typeof payload !== 'object') return;
-    const cfgPatch = sanitizePersistedState(DEFAULT_CFG, payload.cfg || payload);
-    if (cfgPatch.revealStyle === 'rise') cfgPatch.revealStyle = 'slide-up';
-    Object.assign(cfg, cfgPatch);
+      const cfgPatch = sanitizePersistedState(DEFAULT_CFG, payload.cfg || payload);
+      if (cfgPatch.revealStyle === 'rise') cfgPatch.revealStyle = 'slide-up';
+      Object.assign(cfg, cfgPatch);
+      cfg.textAlign = (AnimationHelpers.normalizeTextAlign?.(cfg.textAlign)) || 'center';
 
-    const validRevealIds = new Set(REVEAL_STYLE_OPTIONS.map(o => o.id));
-    if (!validRevealIds.has(cfg.revealStyle)) cfg.revealStyle = 'slide-up';
+      const validRevealIds = new Set(REVEAL_STYLE_OPTIONS.map(o => o.id));
+      if (!validRevealIds.has(cfg.revealStyle)) cfg.revealStyle = 'slide-up';
 
     if (typeof payload.wpl === 'number' && isFinite(payload.wpl)) {
       wplEl.value = String(payload.wpl);
@@ -916,17 +943,19 @@
 
     ohEl.value = String(cfg.endOverhangFactor);
     ohValEl.textContent = Number(cfg.endOverhangFactor).toFixed(2);
-    keepPrevEl.checked = !!cfg.keepPreviousLinesVisible;
-    fontSelect.value = cfg.fontId;
-    fontUrlInput.value = cfg.fontUrl;
-    revealStyleSelect.value = cfg.revealStyle;
-    themeSelect.value = cfg.theme;
-    typographyProfileSelect.value = cfg.typographyProfile || DEFAULT_TYPOGRAPHY_PROFILE_ID;
-    emphasisProfileSelect.value = cfg.emphasisProfile;
+      keepPrevEl.checked = !!cfg.keepPreviousLinesVisible;
+      fontSelect.value = cfg.fontId;
+      fontUrlInput.value = cfg.fontUrl;
+      revealStyleSelect.value = cfg.revealStyle;
+      textAlignSelect.value = cfg.textAlign;
+      themeSelect.value = cfg.theme;
+      typographyProfileSelect.value = cfg.typographyProfile || DEFAULT_TYPOGRAPHY_PROFILE_ID;
+      emphasisProfileSelect.value = cfg.emphasisProfile;
 
-    applyTypographyProfileSelection(cfg.typographyProfile || DEFAULT_TYPOGRAPHY_PROFILE_ID, { silent: true });
-    applyTheme(cfg.theme);
-  }
+      applyTypographyProfileSelection(cfg.typographyProfile || DEFAULT_TYPOGRAPHY_PROFILE_ID, { silent: true });
+      applyTextAlignSelection(cfg.textAlign, { silent: true });
+      applyTheme(cfg.theme);
+    }
 
   async function hydrateState() {
     const stored = readLocalState();
@@ -1269,11 +1298,12 @@ ${String(err)}`);
       return { geom, width, textLen: cleanText.length };
     }).filter(Boolean);
 
-    const totalW =
-      parsedWords.reduce((s,d)=>s+d.width,0) +
-      (parsedWords.length - 1) * spaceW * layoutScale;
+      const totalW =
+        parsedWords.reduce((s,d)=>s+d.width,0) +
+        (parsedWords.length - 1) * spaceW * layoutScale;
 
-    let cursorX = -totalW / 2;
+      const textAlign = (AnimationHelpers.normalizeTextAlign?.(cfg.textAlign)) || 'center';
+      let cursorX = (AnimationHelpers.lineAlignmentOffset?.(totalW, textAlign)) ?? (-totalW / 2);
 
     const meshes  = [];
     const centers = [];
@@ -1303,13 +1333,14 @@ ${String(err)}`);
       meshes.push(mesh);
 
       centers.push(new THREE.Vector3(cursorX + d.width / 2, 0, 0));
-      widths.push(d.width);
+        widths.push(d.width);
 
-      cursorX += d.width + spaceW;
+        cursorX += d.width + spaceW;
+      }
+
+      group.userData.textAlign = textAlign;
+      return { group, meshes, centers, widths, emphasisFlags, normalizedWords };
     }
-
-    return { group, meshes, centers, widths, emphasisFlags, normalizedWords };
-  }
 
   function transcriptionToTimedLines(transcription, wordsPerLine = 8) {
     const words = Array.isArray(transcription?.words) ? transcription.words : [];
@@ -2157,13 +2188,14 @@ ${String(err)}`);
   // Advanced cfg editor
   // -------------------------
   const CFG_SCHEMA = [
-    ['fontId', 'text', 'fontId', 'font preset id (use dropdown)'],
-    ['fontUrl', 'text', 'fontUrl', 'font URL (custom/preset override)'],
-    ['fontFormat', 'text', 'fontFormat', 'auto/ttf/typeface (auto recommended)'],
-    ['typographyProfile', 'text', 'typographyProfile', 'typography preset id (use dropdown)'],
-    ['textSize', 'number', 'textSize', 'word size in world units (rebuild needed)'],
-    ['textDepth', 'number', 'textDepth', 'extrusion depth (rebuild needed)'],
-    ['theme', 'text', 'theme', 'dark or light'],
+      ['fontId', 'text', 'fontId', 'font preset id (use dropdown)'],
+      ['fontUrl', 'text', 'fontUrl', 'font URL (custom/preset override)'],
+      ['fontFormat', 'text', 'fontFormat', 'auto/ttf/typeface (auto recommended)'],
+      ['typographyProfile', 'text', 'typographyProfile', 'typography preset id (use dropdown)'],
+      ['textAlign', 'text', 'textAlign', 'left, center, or right alignment'],
+      ['textSize', 'number', 'textSize', 'word size in world units (rebuild needed)'],
+      ['textDepth', 'number', 'textDepth', 'extrusion depth (rebuild needed)'],
+      ['theme', 'text', 'theme', 'dark or light'],
     ['backgroundColor', 'text', 'backgroundColor', 'background hex (set by theme)'],
     ['color', 'text', 'color', 'hex color (e.g. 0xffffff)'],
     ['cameraDistance', 'number', 'cameraDistance', 'z distance of camera'],
@@ -2227,9 +2259,9 @@ ${String(err)}`);
   }
 
   function applyCfgFromInputs() {
-    for (const [key, input] of cfgInputs.entries()) {
-      const raw = (input.value ?? '').trim();
-      if (!raw) { cfg[key] = DEFAULT_CFG[key]; continue; }
+      for (const [key, input] of cfgInputs.entries()) {
+        const raw = (input.value ?? '').trim();
+        if (!raw) { cfg[key] = DEFAULT_CFG[key]; continue; }
 
       const spec = CFG_SCHEMA.find(x => x[0] === key);
       const type = spec ? spec[1] : 'text';
@@ -2242,16 +2274,19 @@ ${String(err)}`);
         if (raw.toLowerCase() === 'true') cfg[key] = true;
         else if (raw.toLowerCase() === 'false') cfg[key] = false;
         else cfg[key] = raw;
+        }
       }
-    }
 
-    keepPrevEl.checked = !!cfg.keepPreviousLinesVisible;
-    ohValEl.textContent = Number(cfg.endOverhangFactor).toFixed(2);
-    ohEl.value = String(cfg.endOverhangFactor);
-    revealStyleSelect.value = cfg.revealStyle;
-    emphasisProfileSelect.value = cfg.emphasisProfile;
+      cfg.textAlign = (AnimationHelpers.normalizeTextAlign?.(cfg.textAlign)) || 'center';
 
-    baseMat = createBaseMaterial();
+      keepPrevEl.checked = !!cfg.keepPreviousLinesVisible;
+      ohValEl.textContent = Number(cfg.endOverhangFactor).toFixed(2);
+      ohEl.value = String(cfg.endOverhangFactor);
+      revealStyleSelect.value = cfg.revealStyle;
+      textAlignSelect.value = cfg.textAlign;
+      emphasisProfileSelect.value = cfg.emphasisProfile;
+
+      baseMat = createBaseMaterial();
 
     const bg = new THREE.Color(cfg.backgroundColor ?? DEFAULT_CFG.backgroundColor ?? 0x000000);
     scene.background = bg.clone();
@@ -2272,12 +2307,13 @@ ${String(err)}`);
     }
     Object.assign(cfg, structuredClone(DEFAULT_CFG));
     keepPrevEl.checked = !!cfg.keepPreviousLinesVisible;
-    fontSelect.value = cfg.fontId;
-    fontUrlInput.value = cfg.fontUrl;
-    revealStyleSelect.value = cfg.revealStyle;
-    emphasisProfileSelect.value = cfg.emphasisProfile;
-    ohEl.value = String(cfg.endOverhangFactor);
-    ohValEl.textContent = Number(cfg.endOverhangFactor).toFixed(2);
+      fontSelect.value = cfg.fontId;
+      fontUrlInput.value = cfg.fontUrl;
+      revealStyleSelect.value = cfg.revealStyle;
+      textAlignSelect.value = cfg.textAlign;
+      emphasisProfileSelect.value = cfg.emphasisProfile;
+      ohEl.value = String(cfg.endOverhangFactor);
+      ohValEl.textContent = Number(cfg.endOverhangFactor).toFixed(2);
     setStatus('cfg reset to defaults.\n(Rebuild on Replay)');
     persistState();
   }
@@ -2376,15 +2412,16 @@ ${String(err)}`);
     buildCfgEditorUI();
     populateFontPresets();
     populateTypographyProfiles();
-    populateRevealStyles();
-    populateThemes();
-    populateEmphasisProfiles();
-    keepPrevEl.checked = !!cfg.keepPreviousLinesVisible;
-    wplValEl.textContent = String(wplEl.value);
+      populateRevealStyles();
+      populateThemes();
+      populateEmphasisProfiles();
+      keepPrevEl.checked = !!cfg.keepPreviousLinesVisible;
+      wplValEl.textContent = String(wplEl.value);
 
-    await hydrateState();
+      await hydrateState();
 
-    applyTheme(cfg.theme);
+      applyTextAlignSelection(cfg.textAlign, { silent: true });
+      applyTheme(cfg.theme);
 
     const font = await loadFontFromSelection();
 

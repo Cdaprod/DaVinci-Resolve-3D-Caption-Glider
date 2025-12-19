@@ -16,13 +16,15 @@ const {
   visibleHalfWidth,
   requiredDistanceForSpan,
   sanitizePersistedState,
-  normalizePersistedPayload,
-  buildTextGeometrySpec,
-  TYPOGRAPHY_PROFILES,
-  DEFAULT_TYPOGRAPHY_PROFILE_ID,
-  applyTypographyProfile,
-  isValidFontResource,
-} = require('../public/animation-helpers');
+    normalizePersistedPayload,
+    buildTextGeometrySpec,
+    TYPOGRAPHY_PROFILES,
+    DEFAULT_TYPOGRAPHY_PROFILE_ID,
+    applyTypographyProfile,
+    isValidFontResource,
+    normalizeTextAlign,
+    lineAlignmentOffset,
+  } = require('../public/animation-helpers');
 
 function testClamp01() {
   assert.strictEqual(clamp01(-1), 0);
@@ -117,12 +119,26 @@ function testStripControlTokens() {
   assert.strictEqual(breaksOnly.breaks, 3);
 }
 
-function testNormalizeProfileToken() {
-  assert.strictEqual(normalizeProfileToken('a'), 'A');
-  assert.strictEqual(normalizeProfileToken('B '), 'B');
-  assert.strictEqual(normalizeProfileToken('default'), 'default');
-  assert.strictEqual(normalizeProfileToken(''), 'default');
-}
+  function testNormalizeProfileToken() {
+    assert.strictEqual(normalizeProfileToken('a'), 'A');
+    assert.strictEqual(normalizeProfileToken('B '), 'B');
+    assert.strictEqual(normalizeProfileToken('default'), 'default');
+    assert.strictEqual(normalizeProfileToken(''), 'default');
+  }
+
+  function testNormalizeTextAlignHelper() {
+    assert.strictEqual(normalizeTextAlign('LEFT'), 'left');
+    assert.strictEqual(normalizeTextAlign('Center'), 'center');
+    assert.strictEqual(normalizeTextAlign('right'), 'right');
+    assert.strictEqual(normalizeTextAlign('unknown'), 'center');
+  }
+
+  function testLineAlignmentOffsetHelper() {
+    assert.strictEqual(lineAlignmentOffset(4, 'center'), -2);
+    assert.strictEqual(lineAlignmentOffset(4, 'left'), 0);
+    assert.strictEqual(lineAlignmentOffset(4, 'right'), -4);
+    assert.strictEqual(lineAlignmentOffset(-10, 'right'), 0);
+  }
 
 function testParseScriptLinesDefaultFirst() {
   const lines = [
@@ -269,14 +285,15 @@ function testSeedFilesAreCleanObjects() {
     if (!fs.existsSync(seedPath)) continue;
     const data = JSON.parse(fs.readFileSync(seedPath, 'utf8'));
     assert.strictEqual(typeof data.captioner_state_v1, 'object', `${seedPath} captioner_state_v1 should be an object payload`);
-    assert.strictEqual(typeof data.captioner_state_v1.cfg, 'object', `${seedPath} cfg should be an object`);
-    assert.strictEqual(typeof data.captioner_state_v1.wpl, 'number', `${seedPath} wpl should be numeric`);
-    assert.strictEqual(typeof data.captioner_state_v1.cfg.revealStyle, 'string', `${seedPath} revealStyle should be string`);
-    assert.strictEqual(typeof data.captioner_state_v1.cfg.theme, 'string', `${seedPath} theme should be string`);
-    assert.strictEqual(typeof data.captioner_state_v1.cfg.typographyProfile, 'string', `${seedPath} typographyProfile should be string`);
-    assert.strictEqual(typeof data.captioner_state_v1.cfg.paragraphGap, 'number', `${seedPath} paragraphGap should be numeric`);
+      assert.strictEqual(typeof data.captioner_state_v1.cfg, 'object', `${seedPath} cfg should be an object`);
+      assert.strictEqual(typeof data.captioner_state_v1.wpl, 'number', `${seedPath} wpl should be numeric`);
+      assert.strictEqual(typeof data.captioner_state_v1.cfg.revealStyle, 'string', `${seedPath} revealStyle should be string`);
+      assert.strictEqual(typeof data.captioner_state_v1.cfg.theme, 'string', `${seedPath} theme should be string`);
+      assert.strictEqual(typeof data.captioner_state_v1.cfg.typographyProfile, 'string', `${seedPath} typographyProfile should be string`);
+      assert.strictEqual(typeof data.captioner_state_v1.cfg.textAlign, 'string', `${seedPath} textAlign should be string`);
+      assert.strictEqual(typeof data.captioner_state_v1.cfg.paragraphGap, 'number', `${seedPath} paragraphGap should be numeric`);
+    }
   }
-}
 
 function testSeedThemesMatchPalettes() {
   const seeds = [
@@ -321,6 +338,8 @@ function run() {
   testBreakTokensAccumulate();
   testStripControlTokens();
   testNormalizeProfileToken();
+  testNormalizeTextAlignHelper();
+  testLineAlignmentOffsetHelper();
   testVisibleHalfWidth();
   testRequiredDistanceForSpan();
   testBuildTextGeometrySpec();

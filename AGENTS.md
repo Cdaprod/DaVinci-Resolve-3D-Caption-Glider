@@ -14,6 +14,7 @@ This file applies to the entire repository.
 - `[BREAK]` / `[BR=n]` tokens insert paragraph spacing before the next line; keep `paragraphGap` in sync with doc/UI defaults when adjusting layout rules.
 - Theme toggles must flip both background and text palettes (light default = white bg/black text, dark = black bg/white text) and persist through seeds/localStorage; keep defaults/seeds set to the light palette unless a test profile explicitly overrides it.
 - Typography presets now map to `docs/TYPOGRAPHY.md` (Epic/Modern/Luxury/Sci-Fi); keep the preset labels, font URLs, and spacing/depth defaults in sync across `public/index.html`, seeds, and README when making adjustments.
+- Line alignment (left/center/right) is configurable in the UI and advanced cfg; keep the dropdown labels, default (`center`), seeds, and README hints synchronized when tuning layout behavior.
 - Keep the UI responsive for portrait/landscape testing; updates to `public/index.html` should preserve the mobile-friendly width variable and collapsed transforms that avoid page scrolling.
 - Camera framing should keep the active/neighboring words visible: the dynamic FOV/distance framing logic in `public/index.html` must be preserved or improved so highlighted words never drift outside the viewport when spawned.
 - Terminal framing must finish with a right-of-center overhang: preserve the end-overhang blend so the camera clamps toward `maxX + endOverhangPx + endOverhangFactor × lastWidth` instead of re-centering on the final word.

@@ -27,10 +27,10 @@
     return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
   }
 
-  function buildTextGeometrySpec(textSize = 0.1, textDepth = 0.001) {
-    const size = Math.max(1e-4, Number(textSize) || 0.1);
-    const depth = Math.max(0, Number(textDepth) || 0);
-    const bevelEnabled = depth >= 0.002;
+    function buildTextGeometrySpec(textSize = 0.1, textDepth = 0.001) {
+      const size = Math.max(1e-4, Number(textSize) || 0.1);
+      const depth = Math.max(0, Number(textDepth) || 0);
+      const bevelEnabled = depth >= 0.002;
 
     const curveSegments = Math.max(4, Math.min(12, Math.round(size * 80)));
     const bevelSize = bevelEnabled ? Math.min(size * 0.06, depth * 0.8) : 0;
@@ -45,8 +45,22 @@
       bevelSize,
       bevelThickness,
       bevelSegments,
-    };
-  }
+      };
+    }
+
+    function normalizeTextAlign(align = 'center') {
+      const val = String(align ?? 'center').toLowerCase();
+      return ['left', 'center', 'right'].includes(val) ? val : 'center';
+    }
+
+    function lineAlignmentOffset(totalWidth = 0, align = 'center') {
+      const width = Math.max(0, Number(totalWidth) || 0);
+      if (width <= 0) return 0;
+      const a = normalizeTextAlign(align);
+      if (a === 'left') return 0;
+      if (a === 'right') return -width;
+      return -width / 2;
+    }
 
   function damp(current, target, lambda, dt) {
     return current + (target - current) * (1 - Math.exp(-lambda * dt));
@@ -301,6 +315,8 @@
     parseScriptLines,
     stripControlTokens,
     normalizeProfileToken,
+    normalizeTextAlign,
+    lineAlignmentOffset,
     TYPOGRAPHY_PROFILES,
     DEFAULT_TYPOGRAPHY_PROFILE_ID,
     applyTypographyProfile,

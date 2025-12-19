@@ -140,6 +140,7 @@ const cfg = {
   // Text appearance
   textSize: 0.10,
   textDepth: 0.001,
+  textAlign: 'center',
   color: 0xffffff,
   cameraDistance: 3.5,
 
@@ -187,6 +188,8 @@ Text geometry now auto-enables a subtle bevel and higher curve segments when `te
  so deeper extrusions (for example, `textDepth: 0.005`) keep crisp front edges instead of smushing letters together.
 
 You can switch fonts via presets (Helvetiker default, Bebas Neue, Montserrat, Cinzel, Playfair Display, Orbitron, or a custom URL) and choose a reveal style in the UI: **slide-up** (default), **grow-up**, **bloom**, **fade-scale**, **word fade**, **character fade**, or **typewriter** (left-anchored sweep). The **Typography profile** dropdown applies ready-made combinations from `docs/TYPOGRAPHY.md` (Epic title, Modern action, Elegant luxury, Sci-fi tech) adjusting font choice, spacing, extrusion depth, and reveal flavor in one click; manual font/URL edits reset the profile back to `manual` so custom tweaks stay explicit.
+
+Line alignment can be toggled between **left**, **center**, and **right** justification from the UI (and advanced cfg), anchoring each line around the origin so stacked captions stay tidy—hit Replay after switching to rebuild spacing.
 
 Use the **Background theme** dropdown to flip between light (default: white background, black text) and dark (black background, white text). The current theme, colors, and other UI settings persist to `localStorage` alongside your other cfg tweaks.
 

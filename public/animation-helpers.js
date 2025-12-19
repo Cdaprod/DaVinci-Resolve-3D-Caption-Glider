@@ -162,6 +162,71 @@
     return trimmed.length === 1 ? trimmed.toUpperCase() : trimmed.toLowerCase();
   }
 
+  const DEFAULT_TYPOGRAPHY_PROFILE_ID = 'manual';
+
+  const TYPOGRAPHY_PROFILES = {
+    manual: {
+      id: 'manual',
+      label: 'Manual (use cfg values)',
+      settings: {},
+    },
+    'epic-title': {
+      id: 'epic-title',
+      label: 'Epic title card (Cinzel + wide tracking)',
+      settings: {
+        fontId: 'cinzel',
+        textSize: 0.12,
+        textDepth: 0.006,
+        spaceMultiplier: 2.4,
+        stackLineGap: 0.28,
+        revealStyle: 'bloom',
+      },
+    },
+    'modern-action': {
+      id: 'modern-action',
+      label: 'Modern action (Bebas Neue, tight spacing)',
+      settings: {
+        fontId: 'bebas-neue',
+        textSize: 0.14,
+        textDepth: 0.004,
+        spaceMultiplier: 1.65,
+        stackLineGap: 0.18,
+        revealStyle: 'slide-up',
+      },
+    },
+    'elegant-luxury': {
+      id: 'elegant-luxury',
+      label: 'Elegant luxury (Playfair, airy)',
+      settings: {
+        fontId: 'playfair-display',
+        textSize: 0.1,
+        textDepth: 0.003,
+        spaceMultiplier: 2.8,
+        stackLineGap: 0.32,
+        revealStyle: 'grow-up',
+      },
+    },
+    'sci-fi-tech': {
+      id: 'sci-fi-tech',
+      label: 'Sci-fi tech (Orbitron, balanced spacing)',
+      settings: {
+        fontId: 'orbitron',
+        textSize: 0.12,
+        textDepth: 0.0045,
+        spaceMultiplier: 1.9,
+        stackLineGap: 0.22,
+        revealStyle: 'grow-up',
+      },
+    },
+  };
+
+  function applyTypographyProfile(cfg = {}, profileId = DEFAULT_TYPOGRAPHY_PROFILE_ID) {
+    const activeId = TYPOGRAPHY_PROFILES[profileId]?.id || DEFAULT_TYPOGRAPHY_PROFILE_ID;
+    const patch = TYPOGRAPHY_PROFILES[activeId]?.settings || {};
+    const merged = { ...cfg, ...patch, typographyProfile: activeId };
+    return { profileId: activeId, cfg: merged };
+  }
+
   function parseScriptLines(rawLines = [], defaultProfileId = 'default') {
     const segments = [];
     let activeProfile = normalizeProfileToken(defaultProfileId);
@@ -226,5 +291,8 @@
     parseScriptLines,
     stripControlTokens,
     normalizeProfileToken,
+    TYPOGRAPHY_PROFILES,
+    DEFAULT_TYPOGRAPHY_PROFILE_ID,
+    applyTypographyProfile,
   };
 });

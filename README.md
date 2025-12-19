@@ -15,6 +15,7 @@ A beautiful 3D animated caption system for DaVinci Resolve that automatically sy
 - ⚡ **Real-time preview** - See your captions before adding to timeline
 - 🔄 **One-click export** - Send captions back to Resolve as subtitle track
 - 🎭 **Customizable styling** - Adjust colors, timing, animation curves, and more
+- 🖋️ **Typography presets** - Apply ready-made spacing/depth/font combos inspired by `docs/TYPOGRAPHY.md`
 
 ## 🎥 Demo
 
@@ -101,7 +102,7 @@ node tests/animation-helpers.test.js
 
 - Edit `cfg` object in HTML for styling
 - Adjust animation speed, colors, reveal timing
-- Swap fonts using the new preset dropdown (Akira Expanded, Impact, Inter Black via CDN, Apple Garamond, or your own URL) and pick reveal styles (pop rise vs. grow-up) plus emphasis profiles (Documentary or Minimal)
+- Swap fonts using the preset dropdown (Helvetiker, Bebas Neue, Montserrat, Cinzel, Playfair Display, Orbitron, or your own URL), toggle typography profiles from `docs/TYPOGRAPHY.md`, pick reveal styles (pop rise vs. grow-up) plus emphasis profiles (Documentary or Minimal)
 
 1. **Export to Timeline**
 
@@ -134,6 +135,7 @@ const cfg = {
   fontId: 'helvetiker',
   fontUrl: 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/fonts/helvetiker_regular.typeface.json',
   fontFormat: 'typeface', // typeface or ttf
+  typographyProfile: 'manual', // manual, epic-title, modern-action, elegant-luxury, sci-fi-tech
 
   // Text appearance
   textSize: 0.10,
@@ -184,7 +186,7 @@ the app seeds `localStorage` from those files when no prior state exists.
 Text geometry now auto-enables a subtle bevel and higher curve segments when `textDepth` is raised (via `buildTextGeometrySpec`)
  so deeper extrusions (for example, `textDepth: 0.005`) keep crisp front edges instead of smushing letters together.
 
-You can switch fonts via presets (Akira Expanded, Impact, Inter Black via CDN, Apple Garamond Regular/Italic, or a custom URL) and choose a reveal style in the UI: **slide-up** (default), **grow-up**, **bloom**, **fade-scale**, **word fade**, **character fade**, or **typewriter** (left-anchored sweep).
+You can switch fonts via presets (Helvetiker default, Bebas Neue, Montserrat, Cinzel, Playfair Display, Orbitron, or a custom URL) and choose a reveal style in the UI: **slide-up** (default), **grow-up**, **bloom**, **fade-scale**, **word fade**, **character fade**, or **typewriter** (left-anchored sweep). The **Typography profile** dropdown applies ready-made combinations from `docs/TYPOGRAPHY.md` (Epic title, Modern action, Elegant luxury, Sci-fi tech) adjusting font choice, spacing, extrusion depth, and reveal flavor in one click; manual font/URL edits reset the profile back to `manual` so custom tweaks stay explicit.
 
 Use the **Background theme** dropdown to flip between light (default: white background, black text) and dark (black background, white text). The current theme, colors, and other UI settings persist to `localStorage` alongside your other cfg tweaks.
 

@@ -270,6 +270,12 @@
     </label>
 
     <label>
+      Typography profile
+      <select id="typographyProfile"></select>
+      <small>Applies the TYPOGRAPHY.md spacing + depth presets.</small>
+    </label>
+
+    <label>
       Custom font URL (TTF/OTF or typeface JSON)
       <input id="fontUrl" type="text" placeholder="https://…" />
       <small>Used when "Custom URL" is selected. Requires CORS access.</small>
@@ -341,6 +347,8 @@
     fontId: 'helvetiker',
     fontUrl: 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/fonts/helvetiker_regular.typeface.json',
     fontFormat: 'typeface',
+
+    typographyProfile: (window.AnimationHelpers?.DEFAULT_TYPOGRAPHY_PROFILE_ID) || 'manual',
 
     textSize:  0.10,
     textDepth: 0.001,
@@ -461,33 +469,33 @@
       format: 'typeface'
     },
     {
-      id: 'akira-expanded',
-      label: 'Akira Expanded (CDN)',
-      url: 'https://github.com/dharmatype/Akira-Expanded-Demo/raw/master/Akira%20Expanded%20Demo.otf',
+      id: 'bebas-neue',
+      label: 'Bebas Neue (Action, CDN)',
+      url: 'https://raw.githubusercontent.com/google/fonts/main/ofl/bebasneue/BebasNeue-Regular.ttf',
       format: 'ttf'
     },
     {
-      id: 'impact',
-      label: 'Impact (CDN)',
-      url: 'https://github.com/Shina-SOF/impact-font/raw/main/impact.ttf',
+      id: 'montserrat',
+      label: 'Montserrat Variable (CDN)',
+      url: 'https://raw.githubusercontent.com/google/fonts/main/ofl/montserrat/Montserrat%5Bwght%5D.ttf',
       format: 'ttf'
     },
     {
-      id: 'inter-black',
-      label: 'Inter Black (CDN)',
-      url: 'https://github.com/google/fonts/raw/main/ofl/inter/Inter%5Bslnt,wght%5D.ttf',
+      id: 'cinzel',
+      label: 'Cinzel Variable (CDN)',
+      url: 'https://raw.githubusercontent.com/google/fonts/main/ofl/cinzel/Cinzel%5Bwght%5D.ttf',
       format: 'ttf'
     },
     {
-      id: 'apple-garamond',
-      label: 'Apple Garamond Regular (CDN)',
-      url: 'https://github.com/Shina-SOF/apple-garamond/raw/main/AppleGaramond.ttf',
+      id: 'playfair-display',
+      label: 'Playfair Display Variable (CDN)',
+      url: 'https://raw.githubusercontent.com/google/fonts/main/ofl/playfairdisplay/PlayfairDisplay%5Bwght%5D.ttf',
       format: 'ttf'
     },
     {
-      id: 'apple-garamond-italic',
-      label: 'Apple Garamond Light Italic (CDN)',
-      url: 'https://github.com/Shina-SOF/apple-garamond/raw/main/AppleGaramond-LightItalic.ttf',
+      id: 'orbitron',
+      label: 'Orbitron Variable (CDN)',
+      url: 'https://raw.githubusercontent.com/google/fonts/main/ofl/orbitron/Orbitron%5Bwght%5D.ttf',
       format: 'ttf'
     },
     {
@@ -517,6 +525,11 @@
     { id: 'documentary', label: 'Documentary (semantic + terminal stack)' },
     { id: 'minimal', label: 'Minimal (baseline only)' }
   ];
+
+  const DEFAULT_TYPOGRAPHY_PROFILE_ID = AnimationHelpers?.DEFAULT_TYPOGRAPHY_PROFILE_ID || 'manual';
+  const TYPOGRAPHY_PROFILE_OPTIONS = Object.values(AnimationHelpers?.TYPOGRAPHY_PROFILES || {})
+    .map(p => ({ id: p.id, label: p.label || p.id }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 
   const EMPHASIS_PROFILES = {
     documentary: {
@@ -635,6 +648,7 @@
   const ohEl = document.getElementById('oh');
   const ohValEl = document.getElementById('ohVal');
   const fontSelect = document.getElementById('fontSelect');
+  const typographyProfileSelect = document.getElementById('typographyProfile');
   const fontUrlInput = document.getElementById('fontUrl');
   const revealStyleSelect = document.getElementById('revealStyle');
   const themeSelect = document.getElementById('themeSelect');
@@ -708,6 +722,17 @@
     fontUrlInput.value = cfg.fontUrl;
   }
 
+  function populateTypographyProfiles() {
+    typographyProfileSelect.innerHTML = '';
+    for (const p of TYPOGRAPHY_PROFILE_OPTIONS) {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.label;
+      typographyProfileSelect.appendChild(opt);
+    }
+    typographyProfileSelect.value = cfg.typographyProfile || DEFAULT_TYPOGRAPHY_PROFILE_ID;
+  }
+
   function populateRevealStyles() {
     revealStyleSelect.innerHTML = '';
     for (const p of REVEAL_STYLE_OPTIONS) {
@@ -747,6 +772,34 @@
     persistState();
   }
 
+  function applyFontPresetFromCfg() {
+    const preset = FONT_PRESETS.find(p => p.id === cfg.fontId);
+    fontSelect.value = cfg.fontId;
+    if (preset?.url) {
+      fontUrlInput.value = preset.url;
+      cfg.fontUrl = preset.url;
+    }
+    if (preset?.format) {
+      cfg.fontFormat = preset.format;
+    }
+  }
+
+  function applyTypographyProfileSelection(profileId, { silent = false } = {}) {
+    const applied = AnimationHelpers.applyTypographyProfile(cfg, profileId);
+    Object.assign(cfg, applied.cfg);
+
+    typographyProfileSelect.value = applied.profileId;
+    applyFontPresetFromCfg();
+
+    if (cfg.revealStyle) {
+      revealStyleSelect.value = cfg.revealStyle;
+    }
+    if (!silent) {
+      setStatus(`Applied typography profile: ${applied.profileId}\nRebuild on Replay to see spacing + depth changes.`);
+    }
+    persistState();
+  }
+
   function populateEmphasisProfiles() {
     emphasisProfileSelect.innerHTML = '';
     for (const p of EMPHASIS_PROFILE_OPTIONS) {
@@ -764,14 +817,22 @@
     if (preset && preset.url) fontUrlInput.value = preset.url;
     if (preset && preset.format) cfg.fontFormat = preset.format;
     cfg.fontUrl = fontUrlInput.value.trim() || cfg.fontUrl;
+    cfg.typographyProfile = DEFAULT_TYPOGRAPHY_PROFILE_ID;
+    typographyProfileSelect.value = cfg.typographyProfile;
     persistState();
   });
 
   fontUrlInput.addEventListener('input', () => {
     if (fontSelect.value === 'custom') {
       cfg.fontUrl = fontUrlInput.value.trim();
+      cfg.typographyProfile = DEFAULT_TYPOGRAPHY_PROFILE_ID;
+      typographyProfileSelect.value = cfg.typographyProfile;
       persistState();
     }
+  });
+
+  typographyProfileSelect.addEventListener('change', () => {
+    applyTypographyProfileSelection(typographyProfileSelect.value);
   });
 
   revealStyleSelect.addEventListener('change', () => {
@@ -860,8 +921,10 @@
     fontUrlInput.value = cfg.fontUrl;
     revealStyleSelect.value = cfg.revealStyle;
     themeSelect.value = cfg.theme;
+    typographyProfileSelect.value = cfg.typographyProfile || DEFAULT_TYPOGRAPHY_PROFILE_ID;
     emphasisProfileSelect.value = cfg.emphasisProfile;
 
+    applyTypographyProfileSelection(cfg.typographyProfile || DEFAULT_TYPOGRAPHY_PROFILE_ID, { silent: true });
     applyTheme(cfg.theme);
   }
 
@@ -1045,6 +1108,8 @@
 
   const fontLoader = new THREE.FontLoader();
   const ttfLoader = new THREE.TTFLoader();
+  fontLoader.setCrossOrigin?.('anonymous');
+  ttfLoader.setCrossOrigin?.('anonymous');
   const FALLBACK_CANVAS_FONT = { isCanvasFont: true };
 
   function guessFontFormat(url, fmt = 'auto') {
@@ -2092,6 +2157,7 @@ ${String(err)}`);
     ['fontId', 'text', 'fontId', 'font preset id (use dropdown)'],
     ['fontUrl', 'text', 'fontUrl', 'font URL (custom/preset override)'],
     ['fontFormat', 'text', 'fontFormat', 'auto/ttf/typeface (auto recommended)'],
+    ['typographyProfile', 'text', 'typographyProfile', 'typography preset id (use dropdown)'],
     ['textSize', 'number', 'textSize', 'word size in world units (rebuild needed)'],
     ['textDepth', 'number', 'textDepth', 'extrusion depth (rebuild needed)'],
     ['theme', 'text', 'theme', 'dark or light'],
@@ -2306,6 +2372,7 @@ ${String(err)}`);
   async function boot() {
     buildCfgEditorUI();
     populateFontPresets();
+    populateTypographyProfiles();
     populateRevealStyles();
     populateThemes();
     populateEmphasisProfiles();

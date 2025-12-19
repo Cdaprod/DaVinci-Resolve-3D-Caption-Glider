@@ -5,7 +5,7 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
-const { clamp01, computeCenterBounds, endBias, extractEmphasisToken, parseScriptLines, stripControlTokens, normalizeProfileToken, visibleHalfWidth, requiredDistanceForSpan, sanitizePersistedState, normalizePersistedPayload, buildTextGeometrySpec } = require('../public/animation-helpers');
+const { clamp01, computeCenterBounds, endBias, extractEmphasisToken, parseScriptLines, stripControlTokens, normalizeProfileToken, visibleHalfWidth, requiredDistanceForSpan, sanitizePersistedState, normalizePersistedPayload, buildTextGeometrySpec, TYPOGRAPHY_PROFILES, DEFAULT_TYPOGRAPHY_PROFILE_ID, applyTypographyProfile } = require('../public/animation-helpers');
 
 function testClamp01() {
   assert.strictEqual(clamp01(-1), 0);
@@ -194,6 +194,21 @@ function testBuildTextGeometrySpec() {
   assert(deep.bevelSegments >= 3);
 }
 
+function testTypographyProfiles() {
+  assert.ok(TYPOGRAPHY_PROFILES['epic-title']);
+  const base = { textSize: 0.1, textDepth: 0.001, spaceMultiplier: 1.82 };
+  const applied = applyTypographyProfile(base, 'epic-title');
+
+  assert.strictEqual(applied.profileId, 'epic-title');
+  assert.strictEqual(applied.cfg.typographyProfile, 'epic-title');
+  assert(applied.cfg.textDepth > base.textDepth, 'epic profile should deepen extrusion');
+  assert(applied.cfg.spaceMultiplier > base.spaceMultiplier, 'epic profile should widen tracking');
+
+  const fallback = applyTypographyProfile(base, 'unknown-profile');
+  assert.strictEqual(fallback.profileId, DEFAULT_TYPOGRAPHY_PROFILE_ID);
+  assert.strictEqual(fallback.cfg.typographyProfile, DEFAULT_TYPOGRAPHY_PROFILE_ID);
+}
+
 function testSanitizePersistedState() {
   const defaults = { num: 1, flag: false, text: 'hi', ignored: 5 };
   const stored = { num: '2.5', flag: 'true', text: 99, extra: 'drop' };
@@ -231,6 +246,7 @@ function testSeedFilesAreCleanObjects() {
     assert.strictEqual(typeof data.captioner_state_v1.wpl, 'number', `${seedPath} wpl should be numeric`);
     assert.strictEqual(typeof data.captioner_state_v1.cfg.revealStyle, 'string', `${seedPath} revealStyle should be string`);
     assert.strictEqual(typeof data.captioner_state_v1.cfg.theme, 'string', `${seedPath} theme should be string`);
+    assert.strictEqual(typeof data.captioner_state_v1.cfg.typographyProfile, 'string', `${seedPath} typographyProfile should be string`);
     assert.strictEqual(typeof data.captioner_state_v1.cfg.paragraphGap, 'number', `${seedPath} paragraphGap should be numeric`);
   }
 }
@@ -280,6 +296,7 @@ function run() {
   testVisibleHalfWidth();
   testRequiredDistanceForSpan();
   testBuildTextGeometrySpec();
+  testTypographyProfiles();
   testSanitizePersistedState();
   testNormalizePersistedPayload();
   testSeedFilesAreCleanObjects();

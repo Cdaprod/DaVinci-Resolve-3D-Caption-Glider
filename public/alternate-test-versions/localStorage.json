@@ -4,6 +4,7 @@
     "cfg": {
       "fontId": "helvetiker",
       "fontUrl": "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/fonts/helvetiker_regular.typeface.json",
+      "typographyProfile": "manual",
       "theme": "light",
       "backgroundColor": 16777215,
       "spaceMultiplier": 1.82,

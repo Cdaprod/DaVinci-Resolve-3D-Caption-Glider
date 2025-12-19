@@ -71,6 +71,7 @@
   function stripControlTokens(text = '') {
     let pauseMs = 0;
     let holdMs = 0;
+    let breaks = 0;
     let out = String(text || '');
 
     out = out.replace(/\[PAUSE\s*=\s*(\d+)\]/gi, (_, ms) => {
@@ -83,7 +84,13 @@
       return ' ';
     });
 
-    return { text: out.trim(), pauseMs, holdMs };
+    out = out.replace(/\[(BREAK|BR)(?:\s*=\s*(\d+))?\]/gi, (_, __, count) => {
+      const n = Number(count);
+      breaks += isFinite(n) && n > 0 ? Math.floor(n) : 1;
+      return ' ';
+    });
+
+    return { text: out.trim(), pauseMs, holdMs, breaks };
   }
 
   function sanitizePersistedState(defaults = {}, stored = {}) {
@@ -139,6 +146,7 @@
     let activeProfile = normalizeProfileToken(defaultProfileId);
     let pendingPause = 0;
     let pendingHold = 0;
+    let pendingBreaks = 0;
 
     for (const raw of rawLines || []) {
       const line = String(raw ?? '').trim();
@@ -151,7 +159,8 @@
         content = (directive[2] || '').trim();
       }
 
-      const { text, pauseMs, holdMs } = stripControlTokens(content);
+      const { text, pauseMs, holdMs, breaks } = stripControlTokens(content);
+      pendingBreaks += breaks;
       if (!text) {
         pendingPause += pauseMs;
         pendingHold += holdMs;
@@ -163,10 +172,12 @@
         text,
         pauseMs: pendingPause + pauseMs,
         holdMs: pendingHold + holdMs,
+        breaks: pendingBreaks,
       });
 
       pendingPause = 0;
       pendingHold = 0;
+      pendingBreaks = 0;
     }
 
     return segments;

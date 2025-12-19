@@ -53,6 +53,7 @@ function testParseScriptLines() {
     text: 'Opening line',
     pauseMs: 0,
     holdMs: 0,
+    breaks: 0,
   });
 
   assert.deepStrictEqual(segments[1], {
@@ -60,6 +61,7 @@ function testParseScriptLines() {
     text: 'Second line',
     pauseMs: 120,
     holdMs: 0,
+    breaks: 0,
   });
 
   assert.deepStrictEqual(segments[2], {
@@ -67,6 +69,7 @@ function testParseScriptLines() {
     text: 'Third line **bold** word',
     pauseMs: 0,
     holdMs: 200,
+    breaks: 0,
   });
 }
 
@@ -80,6 +83,11 @@ function testStripControlTokens() {
   assert.strictEqual(empty.text, '');
   assert.strictEqual(empty.pauseMs, 10);
   assert.strictEqual(empty.holdMs, 5);
+  assert.strictEqual(empty.breaks, 0);
+
+  const breaksOnly = stripControlTokens('[BREAK][BR=2]');
+  assert.strictEqual(breaksOnly.text, '');
+  assert.strictEqual(breaksOnly.breaks, 3);
 }
 
 function testNormalizeProfileToken() {
@@ -109,6 +117,7 @@ function testParseScriptLinesDefaultFirst() {
     text: 'Default start with no marker',
     pauseMs: 0,
     holdMs: 0,
+    breaks: 0,
   });
 
   assert.deepStrictEqual(segments[1], {
@@ -116,6 +125,7 @@ function testParseScriptLinesDefaultFirst() {
     text: 'Calm dolly line',
     pauseMs: 0,
     holdMs: 0,
+    breaks: 0,
   });
 
   assert.deepStrictEqual(segments[2], {
@@ -123,6 +133,7 @@ function testParseScriptLinesDefaultFirst() {
     text: 'Assertive punch lands here',
     pauseMs: 220,
     holdMs: 0,
+    breaks: 0,
   });
 
   assert.deepStrictEqual(segments[3], {
@@ -130,6 +141,7 @@ function testParseScriptLinesDefaultFirst() {
     text: 'Dramatic settle widens the lens',
     pauseMs: 0,
     holdMs: 320,
+    breaks: 0,
   });
 
   assert.deepStrictEqual(segments[4], {
@@ -137,7 +149,22 @@ function testParseScriptLinesDefaultFirst() {
     text: 'Return to the glide',
     pauseMs: 0,
     holdMs: 0,
+    breaks: 0,
   });
+}
+
+function testBreakTokensAccumulate() {
+  const lines = [
+    'First paragraph line',
+    '[BREAK]',
+    '#B Second block',
+    'Inline break here [BR=2] then text',
+  ];
+
+  const segments = parseScriptLines(lines, 'default');
+  assert.strictEqual(segments.length, 3);
+  assert.strictEqual(segments[1].breaks, 1);
+  assert.strictEqual(segments[2].breaks, 2);
 }
 
 function testVisibleHalfWidth() {
@@ -189,6 +216,8 @@ function testSeedFilesAreCleanObjects() {
     assert.strictEqual(typeof data.captioner_state_v1.cfg, 'object', `${seedPath} cfg should be an object`);
     assert.strictEqual(typeof data.captioner_state_v1.wpl, 'number', `${seedPath} wpl should be numeric`);
     assert.strictEqual(typeof data.captioner_state_v1.cfg.revealStyle, 'string', `${seedPath} revealStyle should be string`);
+    assert.strictEqual(typeof data.captioner_state_v1.cfg.theme, 'string', `${seedPath} theme should be string`);
+    assert.strictEqual(typeof data.captioner_state_v1.cfg.paragraphGap, 'number', `${seedPath} paragraphGap should be numeric`);
   }
 }
 
@@ -199,6 +228,7 @@ function run() {
   testExtractEmphasisToken();
   testParseScriptLines();
   testParseScriptLinesDefaultFirst();
+  testBreakTokensAccumulate();
   testStripControlTokens();
   testNormalizeProfileToken();
   testVisibleHalfWidth();

@@ -183,6 +183,8 @@ the app seeds `localStorage` from those files when no prior state exists.
 
 You can switch fonts via presets (Akira Expanded, Impact, Inter Black via CDN, Apple Garamond Regular/Italic, or a custom URL) and choose a reveal style in the UI: **slide-up** (default), **grow-up**, **bloom**, **fade-scale**, **word fade**, **character fade**, or **typewriter** (left-anchored sweep).
 
+Use the **Background theme** dropdown to flip between dark (black background, white text) and light (white background, near-black text). The current theme, colors, and other UI settings persist to `localStorage` alongside your other cfg tweaks.
+
 Use **bold** markers in your transcript or fallback lines to flag semantic emphasis. The default “Documentary” emphasis profile stacks semantic emphasis (scale 1.08 with a 260ms settle and +120ms hold) with terminal-word cadence (+0.45× word-width drift and +300ms hold) so bold last words land with a gentle overhang. Active words now receive a per-frame glow/scale lift (with softened neighbor glow) so emphasis stays visible as the camera glides through each line. A “Minimal” profile is also available for a lighter touch.
 
 When you enable `keepPreviousLinesVisible`, keep `stackLines` on to preserve legibility; stacked captions reflow using their measured heights and the configured gap so lines don’t overlap. If you disable stacking, completed lines clear automatically to keep the frame clean. Bold words render with a brighter glow on top of the emphasis scaling so semantic emphasis is visible even with the white text palette.
@@ -205,6 +207,7 @@ Cinematic scripting starts in default (no marker required)
 
 - `#A`, `#B`, `#C` toggle per-line camera/reveal pacing until the next switch; `#default` returns to the base glide.
 - `[PAUSE=ms]` delays the next content line; `[HOLD=ms]` extends its post-line hold. Directive-only lines with these tokens carry the pause/hold forward.
+- `[BREAK]` (or `[BR=n]`) inserts a blank paragraph gap before the next caption using the `paragraphGap` spacing.
 - Profiles adjust follow tightness, look-ahead, camera distance, overhang bias, reveal style, and pacing speed while stacking with the existing semantic/terminal emphasis rules.
 - Profile moods: **A** = calm dolly with wider distance and softer bias, **B** = tight/assertive with faster follow and a sharper pop, **C** = dramatic settle with long holds, farther camera, and lingering overhang.
 

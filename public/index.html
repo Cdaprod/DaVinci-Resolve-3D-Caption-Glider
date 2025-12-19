@@ -281,6 +281,11 @@
     </label>
 
     <label>
+      Background theme
+      <select id="themeSelect"></select>
+    </label>
+
+    <label>
       Emphasis profile
       <select id="emphasisProfile"></select>
     </label>
@@ -314,7 +319,7 @@
     <div id="mini">
       Export note: recording uses <code>canvas.captureStream</code> + <code>MediaRecorder</code>.
       Some iOS browsers may block WebM recording.
-      Script tokens: <code>#A/#B/#C</code> switch profiles, <code>#default</code> resets to base; <code>[PAUSE=ms]</code> / <code>[HOLD=ms]</code> apply to the next line.
+      Script tokens: <code>#A/#B/#C</code> switch profiles, <code>#default</code> resets to base; <code>[PAUSE=ms]</code> / <code>[HOLD=ms]</code> apply to the next line; <code>[BREAK]</code> adds a blank paragraph gap before the next caption.
     </div>
   </div>
 </div>
@@ -339,6 +344,8 @@
     textSize:  0.10,
     textDepth: 0.001,
 
+    theme: 'dark',
+    backgroundColor: 0x000000,
     color:     0xffffff,
     cameraDistance: 3.5,
 
@@ -378,13 +385,16 @@
     stackLines: true,
     stackLineGap: 0.22,
     stackAnchor: 'bottom',
-    stackMaxLines: 6
+    stackMaxLines: 6,
+
+    paragraphGap: 0.32
   });
 
   const STORAGE_KEY = 'captioner_state_v1';
   const STORAGE_SEED_URLS = ['./localStorage.json', './alternate-test-versions/localStorage.json'];
   const FALLBACK_DEMO_LINES = [
     'Cinematic scripting starts in default (no marker required)',
+    '[BREAK]',
     '#A Calm dolly profile slows the follow and softens reveals',
     '[PAUSE=220]',
     '#B Assertive pacing tightens follow and pops punctuation',
@@ -497,6 +507,11 @@
     { id: 'typewriter', label: 'Character typewriter sweep' }
   ];
 
+  const THEME_OPTIONS = [
+    { id: 'dark', label: 'Dark (black bg, white text)', background: 0x000000, text: 0xffffff },
+    { id: 'light', label: 'Light (white bg, black text)', background: 0xffffff, text: 0x111111 },
+  ];
+
   const EMPHASIS_PROFILE_OPTIONS = [
     { id: 'documentary', label: 'Documentary (semantic + terminal stack)' },
     { id: 'minimal', label: 'Minimal (baseline only)' }
@@ -569,6 +584,17 @@
 
   let baseMat = createBaseMaterial();
 
+  function refreshAllMeshMaterials() {
+    baseMat = createBaseMaterial();
+    for (const obj of lineObjs) {
+      if (!obj?.meshes) continue;
+      for (const m of obj.meshes) {
+        if (!m?.material || !m.material.color) continue;
+        applyMaterialTone(m.material, !!m.userData?.emphasis);
+      }
+    }
+  }
+
   function applyMaterialTone(mat, isEmphasis = false) {
     if (!mat) return;
     const base = new THREE.Color(cfg.color);
@@ -601,6 +627,7 @@
   const fontSelect = document.getElementById('fontSelect');
   const fontUrlInput = document.getElementById('fontUrl');
   const revealStyleSelect = document.getElementById('revealStyle');
+  const themeSelect = document.getElementById('themeSelect');
   const emphasisProfileSelect = document.getElementById('emphasisProfile');
   const keepPrevEl = document.getElementById('keepPrev');
 
@@ -682,6 +709,32 @@
     revealStyleSelect.value = cfg.revealStyle;
   }
 
+  function populateThemes() {
+    themeSelect.innerHTML = '';
+    for (const t of THEME_OPTIONS) {
+      const opt = document.createElement('option');
+      opt.value = t.id;
+      opt.textContent = t.label;
+      themeSelect.appendChild(opt);
+    }
+    themeSelect.value = cfg.theme;
+  }
+
+  function applyTheme(themeId) {
+    const chosen = THEME_OPTIONS.find(t => t.id === themeId) || THEME_OPTIONS[0];
+    cfg.theme = chosen.id;
+    cfg.backgroundColor = chosen.background;
+    cfg.color = chosen.text;
+
+    const bgColor = new THREE.Color(chosen.background);
+    scene.background = bgColor.clone();
+    renderer.setClearColor(bgColor, 1);
+    document.body.style.background = `#${bgColor.getHexString()}`;
+
+    refreshAllMeshMaterials();
+    persistState();
+  }
+
   function populateEmphasisProfiles() {
     emphasisProfileSelect.innerHTML = '';
     for (const p of EMPHASIS_PROFILE_OPTIONS) {
@@ -713,6 +766,18 @@
     cfg.revealStyle = revealStyleSelect.value;
     setStatus('Reveal style set to: ' + cfg.revealStyle + '\n(Rebuild on Replay)');
     persistState();
+  });
+
+  themeSelect.addEventListener('change', async () => {
+    applyTheme(themeSelect.value);
+    setStatus('Theme set to: ' + cfg.theme + '\n(Rebuilding scene for new materials…)');
+    try {
+      await rebuildSceneFromCurrentSource();
+      setStatus('Theme applied. Replaying with new background + text palette…');
+      replay();
+    } catch (err) {
+      setStatus('Theme rebuild failed:\n' + String(err));
+    }
   });
 
   emphasisProfileSelect.addEventListener('change', () => {
@@ -782,7 +847,10 @@
     fontSelect.value = cfg.fontId;
     fontUrlInput.value = cfg.fontUrl;
     revealStyleSelect.value = cfg.revealStyle;
+    themeSelect.value = cfg.theme;
     emphasisProfileSelect.value = cfg.emphasisProfile;
+
+    applyTheme(cfg.theme);
   }
 
   async function hydrateState() {
@@ -902,6 +970,7 @@
         let active = normalize(defaultProfileId);
         let pendingPause = 0;
         let pendingHold = 0;
+        let pendingBreaks = 0;
 
         for (const raw of lines || []) {
           const line = String(raw ?? '').trim();
@@ -916,10 +985,17 @@
 
           let pauseMs = 0;
           let holdMs = 0;
+          let breaks = 0;
           content = content.replace(/\[PAUSE\s*=\s*(\d+)\]/gi, (_, ms) => { pauseMs += Number(ms) || 0; return ' '; });
           content = content.replace(/\[HOLD\s*=\s*(\d+)\]/gi, (_, ms) => { holdMs += Number(ms) || 0; return ' '; });
+          content = content.replace(/\[(BREAK|BR)(?:\s*=\s*(\d+))?\]/gi, (_, __, count) => {
+            const n = Number(count);
+            breaks += isFinite(n) && n > 0 ? Math.floor(n) : 1;
+            return ' ';
+          });
 
           const text = content.trim();
+          pendingBreaks += breaks;
           if (!text) {
             pendingPause += pauseMs;
             pendingHold += holdMs;
@@ -931,10 +1007,12 @@
             text,
             pauseMs: pendingPause + pauseMs,
             holdMs: pendingHold + holdMs,
+            breaks: pendingBreaks,
           });
 
           pendingPause = 0;
           pendingHold = 0;
+          pendingBreaks = 0;
         }
 
         return segments;
@@ -1060,7 +1138,7 @@ ${String(err)}`);
     canvas.width = width;
     canvas.height = height;
     ctx.font = `${fontWeight} ${pxSize}px system-ui, -apple-system, sans-serif`;
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = new THREE.Color(cfg.color).getStyle();
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(text, width / 2, height / 2 + pxSize * 0.08);
@@ -1764,11 +1842,16 @@ ${String(err)}`);
   function reflowStackedGroups() {
     if (!cfg.keepPreviousLinesVisible || !cfg.stackLines) return;
     const gap = Number(cfg.stackLineGap || 0.22);
+    const paragraphGap = Math.max(gap, Number(cfg.paragraphGap || (cfg.textSize + gap)));
     let cursor = 0;
     for (const g of stackedGroups) {
       if (!g) continue;
+      const breaksBefore = Math.max(0, Number(g.userData?.paragraphBreaks || 0));
+      cursor += breaksBefore * paragraphGap;
+
+      const h = computeGroupHeight(g);
       g.position.y = -cursor;
-      cursor += computeGroupHeight(g) + gap;
+      cursor += h + gap;
     }
     stackedLineCount = stackedGroups.length;
   }
@@ -1883,7 +1966,9 @@ ${String(err)}`);
       obj.profileSettings = getLineProfile(obj.profileId);
       obj.pauseMs = 0;
       obj.holdMs = 0;
+      obj.paragraphBreaks = 0;
       obj.revealStyleOverride = obj.profileSettings?.revealStyle || null;
+      obj.group.userData.paragraphBreaks = obj.paragraphBreaks;
       const durationMs = (typeof obj.startTime === 'number' && typeof obj.endTime === 'number')
         ? Math.max(0, (obj.endTime - obj.startTime) * 1000)
         : 0;
@@ -1902,7 +1987,10 @@ ${String(err)}`);
       obj.profileSettings = getLineProfile(obj.profileId);
       obj.pauseMs = Math.max(0, seg.pauseMs || 0);
       obj.holdMs = Math.max(0, seg.holdMs || 0);
+      obj.paragraphBreaks = Math.max(0, seg.breaks || 0);
       obj.revealStyleOverride = obj.profileSettings?.revealStyle || null;
+
+      obj.group.userData.paragraphBreaks = obj.paragraphBreaks;
 
       const punctuationCount = (seg.text.match(/[.,;:!?…—-]/g) || []).length;
       const wordCount = obj.normalizedWords?.length ?? 0;
@@ -1998,6 +2086,8 @@ ${String(err)}`);
     ['fontFormat', 'text', 'fontFormat', 'auto/ttf/typeface (auto recommended)'],
     ['textSize', 'number', 'textSize', 'word size in world units (rebuild needed)'],
     ['textDepth', 'number', 'textDepth', 'extrusion depth (rebuild needed)'],
+    ['theme', 'text', 'theme', 'dark or light'],
+    ['backgroundColor', 'text', 'backgroundColor', 'background hex (set by theme)'],
     ['color', 'text', 'color', 'hex color (e.g. 0xffffff)'],
     ['cameraDistance', 'number', 'cameraDistance', 'z distance of camera'],
     ['wordsPerSecond', 'number', 'wordsPerSecond', 'fallback speed mode only'],
@@ -2023,7 +2113,8 @@ ${String(err)}`);
     ['stackLines', 'text', 'stackLines', 'true/false (when keepPrev true)'],
     ['stackLineGap', 'number', 'stackLineGap', 'vertical gap between stacked lines'],
     ['stackAnchor', 'text', 'stackAnchor', 'bottom or center'],
-    ['stackMaxLines', 'number', 'stackMaxLines', 'max stacked lines visible']
+    ['stackMaxLines', 'number', 'stackMaxLines', 'max stacked lines visible'],
+    ['paragraphGap', 'number', 'paragraphGap', 'extra gap when [BREAK]/[BR] tokens appear']
   ];
 
   const cfgInputs = new Map();
@@ -2084,6 +2175,12 @@ ${String(err)}`);
     emphasisProfileSelect.value = cfg.emphasisProfile;
 
     baseMat = createBaseMaterial();
+
+    const bg = new THREE.Color(cfg.backgroundColor ?? 0x000000);
+    scene.background = bg.clone();
+    renderer.setClearColor(bg, 1);
+    document.body.style.background = `#${bg.getHexString()}`;
+    refreshAllMeshMaterials();
 
     persistState();
 
@@ -2201,11 +2298,14 @@ ${String(err)}`);
     buildCfgEditorUI();
     populateFontPresets();
     populateRevealStyles();
+    populateThemes();
     populateEmphasisProfiles();
     keepPrevEl.checked = !!cfg.keepPreviousLinesVisible;
     wplValEl.textContent = String(wplEl.value);
 
     await hydrateState();
+
+    applyTheme(cfg.theme);
 
     const font = await loadFontFromSelection();
 

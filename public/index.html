@@ -329,6 +329,7 @@
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/TTFLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/geometries/TextGeometry.js"></script>
 <script src="./animation-helpers.js"></script>
+<script src="./lighting-rig.js"></script>
 
 <script>
   // -------------------------
@@ -562,23 +563,25 @@
   const camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.05, 200);
   scene.add(camera);
 
-  const ambient = new THREE.AmbientLight(0xffffff, 0.35);
-  const rimLight = new THREE.DirectionalLight(0x6ec8ff, 0.55);
-  rimLight.position.set(0.7, 1.1, 1.8);
-  const fillLight = new THREE.PointLight(0xffffff, 0.28);
-  fillLight.position.set(-1.4, -0.6, 1.2);
-  scene.add(ambient);
-  camera.add(rimLight);
-  camera.add(fillLight);
+  const lightingRig = (window.CaptionLighting || {}).applyLightingRig?.({
+    THREE,
+    scene,
+    camera,
+    palette: { text: cfg.color, background: cfg.backgroundColor },
+  });
 
-  function createBaseMaterial() {
-    return new THREE.MeshPhongMaterial({
+  function createBaseMaterial(isEmphasis = false) {
+    if (lightingRig?.buildMaterialParams) {
+      return new THREE.MeshStandardMaterial(lightingRig.buildMaterialParams(cfg.color, { emphasis: isEmphasis }));
+    }
+    return new THREE.MeshStandardMaterial({
       color: cfg.color,
-      emissive: new THREE.Color(cfg.color).multiplyScalar(0.22),
-      specular: new THREE.Color(0xffffff),
-      shininess: 85,
+      emissive: cfg.color,
+      emissiveIntensity: isEmphasis ? 0.35 : 0.18,
+      metalness: 0.05,
+      roughness: isEmphasis ? 0.38 : 0.44,
       transparent: true,
-      opacity: 1
+      opacity: 1,
     });
   }
 
@@ -589,20 +592,27 @@
     for (const obj of lineObjs) {
       if (!obj?.meshes) continue;
       for (const m of obj.meshes) {
-        if (!m?.material || !m.material.color) continue;
+        if (!m?.material) continue;
         applyMaterialTone(m.material, !!m.userData?.emphasis);
       }
     }
   }
 
   function applyMaterialTone(mat, isEmphasis = false) {
+    if (lightingRig?.tintMaterial) {
+      lightingRig.tintMaterial(mat, cfg.color, { emphasis: isEmphasis });
+      return;
+    }
     if (!mat) return;
-    const base = new THREE.Color(cfg.color);
-    mat.color.copy(base);
-    const glow = isEmphasis ? 0.45 : 0.22;
-    mat.emissive.copy(base).multiplyScalar(glow);
-    mat.shininess = isEmphasis ? 125 : 90;
-    mat.emissiveIntensity = isEmphasis ? 1.55 : 1.05;
+    const params = lightingRig?.buildMaterialParams?.(cfg.color, { emphasis: isEmphasis }) || {};
+    if (mat.color?.set) mat.color.set(params.color ?? cfg.color);
+    if (mat.emissive?.set) mat.emissive.set(params.emissive ?? cfg.color);
+    mat.emissiveIntensity = params.emissiveIntensity ?? (isEmphasis ? 0.35 : 0.18);
+    mat.metalness = params.metalness ?? 0.05;
+    mat.roughness = params.roughness ?? (isEmphasis ? 0.38 : 0.44);
+    mat.opacity = params.opacity ?? 1;
+    mat.transparent = params.transparent ?? true;
+    mat.needsUpdate = true;
   }
 
   let lineObjs = [];
@@ -730,6 +740,8 @@
     scene.background = bgColor.clone();
     renderer.setClearColor(bgColor, 1);
     document.body.style.background = `#${bgColor.getHexString()}`;
+
+    lightingRig?.updatePalette?.({ text: cfg.color, background: cfg.backgroundColor });
 
     refreshAllMeshMaterials();
     persistState();
@@ -2180,6 +2192,7 @@ ${String(err)}`);
     scene.background = bg.clone();
     renderer.setClearColor(bg, 1);
     document.body.style.background = `#${bg.getHexString()}`;
+    lightingRig?.updatePalette?.({ text: cfg.color, background: cfg.backgroundColor });
     refreshAllMeshMaterials();
 
     persistState();

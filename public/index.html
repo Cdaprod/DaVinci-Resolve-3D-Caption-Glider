@@ -640,6 +640,7 @@
   }
 
   let lineObjs = [];
+  let lineImportStats = { rawLineCount: 0, segmentCount: 0 };
   let transcriptionData = null;
   let fontRef = null;
 
@@ -1980,9 +1981,13 @@ ${String(err)}`);
   function runSequence(lineIdx = 0) {
     if (lineIdx >= lineObjs.length) {
       isPlaying = false;
+      const rawLineCount = Math.max(lineImportStats?.rawLineCount || 0, lineObjs.length);
+      const segmentNote = (lineImportStats?.rawLineCount && lineImportStats.rawLineCount !== lineObjs.length)
+        ? ` (segments: ${lineObjs.length})`
+        : '';
       setStatus(transcriptionData
-        ? `Done. (Resolve) Lines: ${lineObjs.length}  Words: ${transcriptionData.words?.length ?? 0}`
-        : `Done. (demo-lines.txt) Lines: ${lineObjs.length}`
+        ? `Done. (Resolve) Lines: ${rawLineCount}${segmentNote}  Words: ${transcriptionData.words?.length ?? 0}`
+        : `Done. (demo-lines.txt) Lines: ${rawLineCount}${segmentNote}`
       );
       return;
     }
@@ -2063,6 +2068,7 @@ ${String(err)}`);
 
   function buildFromTimedLines(font, timedLines) {
     clearAllLinesFromScene();
+    lineImportStats = { rawLineCount: Array.isArray(timedLines) ? timedLines.length : 0, segmentCount: 0 };
     lineObjs = [];
     for (const ln of timedLines) {
       const obj = buildLine(font, ln.text, ln.words);
@@ -2082,10 +2088,13 @@ ${String(err)}`);
       obj.durationMs = Math.max(50, durationMs);
       lineObjs.push(obj);
     }
+
+    lineImportStats.segmentCount = lineObjs.length;
   }
 
   function buildFromPlainLines(font, lines) {
     clearAllLinesFromScene();
+    lineImportStats = { rawLineCount: Array.isArray(lines) ? lines.length : 0, segmentCount: 0 };
     lineObjs = [];
     const segments = parseScriptLines(lines, DEFAULT_LINE_PROFILE_ID);
     for (const seg of segments) {
@@ -2105,6 +2114,8 @@ ${String(err)}`);
 
       lineObjs.push(obj);
     }
+
+    lineImportStats.segmentCount = lineObjs.length;
   }
 
   // -------------------------
@@ -2447,7 +2458,11 @@ ${String(err)}`);
     camera.lookAt(new THREE.Vector3(0,0,0));
     render();
 
-    setStatus(`Loaded fallback demo-lines.txt\nLines: ${lines.length}`);
+    const rawLineCount = Math.max(lineImportStats?.rawLineCount || 0, lineImportStats?.segmentCount || 0);
+    const segmentNote = (lineImportStats?.rawLineCount && lineImportStats.rawLineCount !== lineImportStats.segmentCount)
+      ? ` (segments: ${lineImportStats.segmentCount})`
+      : '';
+    setStatus(`Loaded fallback demo-lines.txt\nLines: ${rawLineCount}${segmentNote}`);
     replay();
   }
 

@@ -243,16 +243,30 @@
 <body>
 <canvas id="c"></canvas>
 
-<div id="ui" class="collapsed">
-  <div id="uiHeader">
-    <div id="uiTitle">Resolve Transcript Sync</div>
-    <button id="uiToggle" title="Collapse/Expand">◀</button>
-  </div>
+  <div id="ui" class="collapsed">
+    <div id="uiHeader">
+      <div id="uiTitle">Resolve Transcript Sync</div>
+      <button id="uiToggle" title="Collapse/Expand">◀</button>
+    </div>
 
-  <div id="uiBody">
-    <button id="btnLoad">Load from Resolve</button>
-    <button id="btnReplay">Replay</button>
-    <button id="btnCreate">Create Captions in Resolve</button>
+    <div id="uiBody">
+    <details class="cfgbox" id="workspacePanel" open>
+      <summary>Workspace</summary>
+      <label>
+        Project
+        <select id="projectSelect"></select>
+      </label>
+      <label>
+        Video
+        <select id="videoSelect"></select>
+      </label>
+      <button id="btnGenerateCaptions">Generate Captions</button>
+      <small id="workspaceStatus">Pick a project to list media.</small>
+    </details>
+
+      <button id="btnLoad">Load from Resolve</button>
+      <button id="btnReplay">Replay</button>
+      <button id="btnCreate">Create Captions in Resolve</button>
 
     <div class="row">
       <button id="btnRecord">Record (WebM)</button>
@@ -643,6 +657,8 @@
   let lineImportStats = { rawLineCount: 0, segmentCount: 0 };
   let transcriptionData = null;
   let fontRef = null;
+  const WORKSPACE_DEFAULT = Object.freeze({ project: '', video: '' });
+  let workspaceState = { ...WORKSPACE_DEFAULT };
 
   let stackedLineCount = 0;
   const stackedGroups = [];
@@ -655,6 +671,10 @@
   const uiToggle = document.getElementById('uiToggle');
 
   const statusEl = document.getElementById('status');
+  const projectSelect = document.getElementById('projectSelect');
+  const videoSelect = document.getElementById('videoSelect');
+  const btnGenerateCaptions = document.getElementById('btnGenerateCaptions');
+  const workspaceStatusEl = document.getElementById('workspaceStatus');
   const wplEl = document.getElementById('wpl');
   const wplValEl = document.getElementById('wplVal');
   const ohEl = document.getElementById('oh');
@@ -722,6 +742,22 @@
     setStatus('Applied keepPreviousLinesVisible: ' + cfg.keepPreviousLinesVisible + '\n(Rebuild on Replay)');
     persistState();
   });
+
+  projectSelect?.addEventListener('change', async () => {
+    workspaceState.project = projectSelect.value || '';
+    workspaceState.video = '';
+    syncWorkspaceInputs();
+    persistState();
+    await refreshVideos(workspaceState.project);
+  });
+
+  videoSelect?.addEventListener('change', () => {
+    workspaceState.video = videoSelect.value || '';
+    syncWorkspaceInputs();
+    persistState();
+  });
+
+  btnGenerateCaptions?.addEventListener('click', () => generateWorkspaceCaptions());
 
   function populateFontPresets() {
     fontSelect.innerHTML = '';
@@ -920,6 +956,10 @@
       const payload = {
         cfg: sanitizePersistedState(DEFAULT_CFG, cfg),
         wpl: Number(wplEl?.value ?? 0) || 0,
+        workspace: {
+          project: workspaceState.project || '',
+          video: workspaceState.video || '',
+        },
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     } catch (_) {}
@@ -934,6 +974,11 @@
 
       const validRevealIds = new Set(REVEAL_STYLE_OPTIONS.map(o => o.id));
       if (!validRevealIds.has(cfg.revealStyle)) cfg.revealStyle = 'slide-up';
+
+    if (payload.workspace && typeof payload.workspace === 'object') {
+      if (typeof payload.workspace.project === 'string') workspaceState.project = payload.workspace.project;
+      if (typeof payload.workspace.video === 'string') workspaceState.video = payload.workspace.video;
+    }
 
     if (typeof payload.wpl === 'number' && isFinite(payload.wpl)) {
       wplEl.value = String(payload.wpl);
@@ -956,6 +1001,7 @@
       applyTypographyProfileSelection(cfg.typographyProfile || DEFAULT_TYPOGRAPHY_PROFILE_ID, { silent: true });
       applyTextAlignSelection(cfg.textAlign, { silent: true });
       applyTheme(cfg.theme);
+      syncWorkspaceInputs();
     }
 
   async function hydrateState() {
@@ -965,6 +1011,116 @@
     if (seeded) {
       applyPersistedState(seeded);
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded)); } catch (_) {}
+    }
+  }
+
+  function setWorkspaceStatus(msg) {
+    if (workspaceStatusEl) workspaceStatusEl.textContent = msg;
+  }
+
+  function syncWorkspaceInputs() {
+    if (projectSelect) projectSelect.value = workspaceState.project || '';
+    if (videoSelect) videoSelect.value = workspaceState.video || '';
+  }
+
+  async function refreshProjects({ keepSelection = true } = {}) {
+    if (!projectSelect) return;
+    setWorkspaceStatus('Loading projects…');
+    projectSelect.innerHTML = '<option value="">Select a project</option>';
+    try {
+      const res = await fetch('/api/projects', { cache: 'no-store' });
+      if (!res.ok) throw new Error('request failed');
+      const data = await res.json();
+      const items = Array.isArray(data.projects) ? data.projects : [];
+      for (const name of items) {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        projectSelect.appendChild(opt);
+      }
+      if (keepSelection && workspaceState.project && items.includes(workspaceState.project)) {
+        projectSelect.value = workspaceState.project;
+        await refreshVideos(workspaceState.project, { keepSelection: true });
+      } else {
+        workspaceState.project = projectSelect.value || '';
+        workspaceState.video = '';
+        syncWorkspaceInputs();
+        persistState();
+      }
+      setWorkspaceStatus('Projects ready.');
+    } catch (err) {
+      setWorkspaceStatus('Project listing failed.');
+    }
+  }
+
+  async function refreshVideos(projectId, { keepSelection = false } = {}) {
+    if (!videoSelect) return;
+    if (!projectId) {
+      videoSelect.innerHTML = '<option value="">Select a project</option>';
+      return;
+    }
+    setWorkspaceStatus('Loading media…');
+    videoSelect.innerHTML = '<option value="">Select a video</option>';
+    try {
+      const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/media`, { cache: 'no-store' });
+      if (!res.ok) throw new Error('request failed');
+      const data = await res.json();
+      const items = Array.isArray(data.videos) ? data.videos : [];
+      for (const rel of items) {
+        const opt = document.createElement('option');
+        opt.value = rel;
+        opt.textContent = rel;
+        videoSelect.appendChild(opt);
+      }
+      if (keepSelection && workspaceState.video && items.includes(workspaceState.video)) {
+        videoSelect.value = workspaceState.video;
+      } else {
+        workspaceState.video = videoSelect.value || '';
+        syncWorkspaceInputs();
+        persistState();
+      }
+      setWorkspaceStatus('Media ready.');
+    } catch (err) {
+      setWorkspaceStatus('Media listing failed.');
+    }
+  }
+
+  async function generateWorkspaceCaptions() {
+    const projectId = projectSelect?.value || '';
+    const videoRel = videoSelect?.value || '';
+    if (!projectId || !videoRel) {
+      setWorkspaceStatus('Select a project + video first.');
+      return;
+    }
+
+    setWorkspaceStatus('Generating captions…');
+    try {
+      const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/media/generate-captions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ video_rel_path: videoRel, model_size: 'small', max_chars: Number(wplEl.value) * 4 }),
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        setWorkspaceStatus(`Generate failed: ${txt || res.status}`);
+        return;
+      }
+      const data = await res.json();
+      const linesUrl = `/api/projects/${encodeURIComponent(projectId)}/file?path=${encodeURIComponent(data.lines_rel_path)}`;
+      cfg.linesUrl = linesUrl;
+      workspaceState.project = projectId;
+      workspaceState.video = videoRel;
+      transcriptionData = null;
+      persistState();
+
+      const lines = await loadLines(cfg.linesUrl);
+      if (!fontRef) fontRef = await loadFontFromSelection();
+      buildFromPlainLines(fontRef, lines);
+      setStatus(`Generated captions for ${videoRel}\nLines: ${lines.length}`);
+      setWorkspaceStatus('Captions ready.');
+      replay();
+    } catch (err) {
+      setWorkspaceStatus('Generate failed.');
     }
   }
 
@@ -2430,6 +2586,8 @@ ${String(err)}`);
       wplValEl.textContent = String(wplEl.value);
 
       await hydrateState();
+      syncWorkspaceInputs();
+      await refreshProjects({ keepSelection: true });
 
       applyTextAlignSelection(cfg.textAlign, { silent: true });
       applyTheme(cfg.theme);

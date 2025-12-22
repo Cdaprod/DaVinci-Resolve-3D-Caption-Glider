@@ -27,3 +27,4 @@ This file applies to the entire repository.
 - Text geometry uses `buildTextGeometrySpec` (in `public/animation-helpers.js`) to increase curve segments and add a subtle bevel for deeper extrusions; keep geometry defaults and helper tests aligned when retuning textDepth behavior.
 - The Python bridge now runs on FastAPI/uvicorn and serves `public/index.html`; keep the docker-compose include chain (`docker-compose.yaml` → `docker/docker-compose.yaml`) intact when adjusting dev workflows.
 - SRT exports land in `captions/` and should enqueue an import attempt; keep that directory as the default output for new endpoints or jobs.
+- The LAN captioner now lives in `app/main.py`; keep its file-serving allowlist and `CAPTIONER_PROJECTS_ROOT` contract in sync with docker compose bindings when extending the API.

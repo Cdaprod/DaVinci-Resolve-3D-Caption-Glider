@@ -4,6 +4,7 @@
     "cfg": {
       "fontId": "helvetiker",
       "fontUrl": "https://cdn.jsdelivr.net/npm/three@0.128.0/examples/fonts/helvetiker_regular.typeface.json",
+      "typographyProfile": "manual",
       "theme": "light",
       "backgroundColor": 16777215,
       "spaceMultiplier": 1.82,
@@ -17,6 +18,7 @@
       "revealZ": 0.05,
       "revealOvershoot": 0.02,
       "revealStyle": "slide-up",
+      "textAlign": "center",
       "keepPreviousLinesVisible": false,
       "stackLines": true,
       "stackLineGap": 0.22,
@@ -24,6 +26,10 @@
       "paragraphGap": 0.32,
       "textDepth": 0.001,
       "color": 0
+    },
+    "workspace": {
+      "project": "",
+      "video": ""
     },
     "wpl": 8
   }

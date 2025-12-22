@@ -5,12 +5,41 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
-const { clamp01, computeCenterBounds, endBias, extractEmphasisToken, parseScriptLines, stripControlTokens, normalizeProfileToken, visibleHalfWidth, requiredDistanceForSpan, sanitizePersistedState, normalizePersistedPayload, buildTextGeometrySpec } = require('../public/animation-helpers');
+const {
+  clamp01,
+  computeCenterBounds,
+  endBias,
+  extractEmphasisToken,
+  parseScriptLines,
+  stripControlTokens,
+  normalizeProfileToken,
+  visibleHalfWidth,
+  requiredDistanceForSpan,
+  sanitizePersistedState,
+    normalizePersistedPayload,
+    buildTextGeometrySpec,
+    TYPOGRAPHY_PROFILES,
+    DEFAULT_TYPOGRAPHY_PROFILE_ID,
+    applyTypographyProfile,
+    isValidFontResource,
+    normalizeTextAlign,
+    lineAlignmentOffset,
+  } = require('../public/animation-helpers');
 
 function testClamp01() {
   assert.strictEqual(clamp01(-1), 0);
   assert.strictEqual(clamp01(0.5), 0.5);
   assert.strictEqual(clamp01(2), 1);
+}
+
+function testIsValidFontResource() {
+  const valid = { data: { glyphs: { ' ': { ha: 20 } }, resolution: 512 } };
+  assert.strictEqual(isValidFontResource(valid), true);
+
+  assert.strictEqual(isValidFontResource(null), false);
+  assert.strictEqual(isValidFontResource({}), false);
+  assert.strictEqual(isValidFontResource({ data: { glyphs: {} } }), false);
+  assert.strictEqual(isValidFontResource({ data: { glyphs: {}, resolution: 'bad' } }), false);
 }
 
 function testComputeCenterBounds() {
@@ -90,12 +119,26 @@ function testStripControlTokens() {
   assert.strictEqual(breaksOnly.breaks, 3);
 }
 
-function testNormalizeProfileToken() {
-  assert.strictEqual(normalizeProfileToken('a'), 'A');
-  assert.strictEqual(normalizeProfileToken('B '), 'B');
-  assert.strictEqual(normalizeProfileToken('default'), 'default');
-  assert.strictEqual(normalizeProfileToken(''), 'default');
-}
+  function testNormalizeProfileToken() {
+    assert.strictEqual(normalizeProfileToken('a'), 'A');
+    assert.strictEqual(normalizeProfileToken('B '), 'B');
+    assert.strictEqual(normalizeProfileToken('default'), 'default');
+    assert.strictEqual(normalizeProfileToken(''), 'default');
+  }
+
+  function testNormalizeTextAlignHelper() {
+    assert.strictEqual(normalizeTextAlign('LEFT'), 'left');
+    assert.strictEqual(normalizeTextAlign('Center'), 'center');
+    assert.strictEqual(normalizeTextAlign('right'), 'right');
+    assert.strictEqual(normalizeTextAlign('unknown'), 'center');
+  }
+
+  function testLineAlignmentOffsetHelper() {
+    assert.strictEqual(lineAlignmentOffset(4, 'center'), -2);
+    assert.strictEqual(lineAlignmentOffset(4, 'left'), 0);
+    assert.strictEqual(lineAlignmentOffset(4, 'right'), -4);
+    assert.strictEqual(lineAlignmentOffset(-10, 'right'), 0);
+  }
 
 function testParseScriptLinesDefaultFirst() {
   const lines = [
@@ -194,6 +237,21 @@ function testBuildTextGeometrySpec() {
   assert(deep.bevelSegments >= 3);
 }
 
+function testTypographyProfiles() {
+  assert.ok(TYPOGRAPHY_PROFILES['epic-title']);
+  const base = { textSize: 0.1, textDepth: 0.001, spaceMultiplier: 1.82 };
+  const applied = applyTypographyProfile(base, 'epic-title');
+
+  assert.strictEqual(applied.profileId, 'epic-title');
+  assert.strictEqual(applied.cfg.typographyProfile, 'epic-title');
+  assert(applied.cfg.textDepth > base.textDepth, 'epic profile should deepen extrusion');
+  assert(applied.cfg.spaceMultiplier > base.spaceMultiplier, 'epic profile should widen tracking');
+
+  const fallback = applyTypographyProfile(base, 'unknown-profile');
+  assert.strictEqual(fallback.profileId, DEFAULT_TYPOGRAPHY_PROFILE_ID);
+  assert.strictEqual(fallback.cfg.typographyProfile, DEFAULT_TYPOGRAPHY_PROFILE_ID);
+}
+
 function testSanitizePersistedState() {
   const defaults = { num: 1, flag: false, text: 'hi', ignored: 5 };
   const stored = { num: '2.5', flag: 'true', text: 99, extra: 'drop' };
@@ -227,13 +285,15 @@ function testSeedFilesAreCleanObjects() {
     if (!fs.existsSync(seedPath)) continue;
     const data = JSON.parse(fs.readFileSync(seedPath, 'utf8'));
     assert.strictEqual(typeof data.captioner_state_v1, 'object', `${seedPath} captioner_state_v1 should be an object payload`);
-    assert.strictEqual(typeof data.captioner_state_v1.cfg, 'object', `${seedPath} cfg should be an object`);
-    assert.strictEqual(typeof data.captioner_state_v1.wpl, 'number', `${seedPath} wpl should be numeric`);
-    assert.strictEqual(typeof data.captioner_state_v1.cfg.revealStyle, 'string', `${seedPath} revealStyle should be string`);
-    assert.strictEqual(typeof data.captioner_state_v1.cfg.theme, 'string', `${seedPath} theme should be string`);
-    assert.strictEqual(typeof data.captioner_state_v1.cfg.paragraphGap, 'number', `${seedPath} paragraphGap should be numeric`);
+      assert.strictEqual(typeof data.captioner_state_v1.cfg, 'object', `${seedPath} cfg should be an object`);
+      assert.strictEqual(typeof data.captioner_state_v1.wpl, 'number', `${seedPath} wpl should be numeric`);
+      assert.strictEqual(typeof data.captioner_state_v1.cfg.revealStyle, 'string', `${seedPath} revealStyle should be string`);
+      assert.strictEqual(typeof data.captioner_state_v1.cfg.theme, 'string', `${seedPath} theme should be string`);
+      assert.strictEqual(typeof data.captioner_state_v1.cfg.typographyProfile, 'string', `${seedPath} typographyProfile should be string`);
+      assert.strictEqual(typeof data.captioner_state_v1.cfg.textAlign, 'string', `${seedPath} textAlign should be string`);
+      assert.strictEqual(typeof data.captioner_state_v1.cfg.paragraphGap, 'number', `${seedPath} paragraphGap should be numeric`);
+    }
   }
-}
 
 function testSeedThemesMatchPalettes() {
   const seeds = [
@@ -269,6 +329,7 @@ function testSeedThemesMatchPalettes() {
 
 function run() {
   testClamp01();
+  testIsValidFontResource();
   testComputeCenterBounds();
   testEndBias();
   testExtractEmphasisToken();
@@ -277,9 +338,12 @@ function run() {
   testBreakTokensAccumulate();
   testStripControlTokens();
   testNormalizeProfileToken();
+  testNormalizeTextAlignHelper();
+  testLineAlignmentOffsetHelper();
   testVisibleHalfWidth();
   testRequiredDistanceForSpan();
   testBuildTextGeometrySpec();
+  testTypographyProfiles();
   testSanitizePersistedState();
   testNormalizePersistedPayload();
   testSeedFilesAreCleanObjects();

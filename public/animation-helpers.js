@@ -27,10 +27,10 @@
     return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
   }
 
-  function buildTextGeometrySpec(textSize = 0.1, textDepth = 0.001) {
-    const size = Math.max(1e-4, Number(textSize) || 0.1);
-    const depth = Math.max(0, Number(textDepth) || 0);
-    const bevelEnabled = depth >= 0.002;
+    function buildTextGeometrySpec(textSize = 0.1, textDepth = 0.001) {
+      const size = Math.max(1e-4, Number(textSize) || 0.1);
+      const depth = Math.max(0, Number(textDepth) || 0);
+      const bevelEnabled = depth >= 0.002;
 
     const curveSegments = Math.max(4, Math.min(12, Math.round(size * 80)));
     const bevelSize = bevelEnabled ? Math.min(size * 0.06, depth * 0.8) : 0;
@@ -45,11 +45,34 @@
       bevelSize,
       bevelThickness,
       bevelSegments,
-    };
-  }
+      };
+    }
+
+    function normalizeTextAlign(align = 'center') {
+      const val = String(align ?? 'center').toLowerCase();
+      return ['left', 'center', 'right'].includes(val) ? val : 'center';
+    }
+
+    function lineAlignmentOffset(totalWidth = 0, align = 'center') {
+      const width = Math.max(0, Number(totalWidth) || 0);
+      if (width <= 0) return 0;
+      const a = normalizeTextAlign(align);
+      if (a === 'left') return 0;
+      if (a === 'right') return -width;
+      return -width / 2;
+    }
 
   function damp(current, target, lambda, dt) {
     return current + (target - current) * (1 - Math.exp(-lambda * dt));
+  }
+
+  function isValidFontResource(font) {
+    if (!font || typeof font !== 'object') return false;
+    const data = font.data;
+    if (!data || typeof data !== 'object') return false;
+    const hasGlyphs = !!data.glyphs && typeof data.glyphs === 'object';
+    const hasResolution = typeof data.resolution === 'number' && isFinite(data.resolution);
+    return hasGlyphs && hasResolution;
   }
 
   function computeCenterBounds(centers) {
@@ -162,6 +185,71 @@
     return trimmed.length === 1 ? trimmed.toUpperCase() : trimmed.toLowerCase();
   }
 
+  const DEFAULT_TYPOGRAPHY_PROFILE_ID = 'manual';
+
+  const TYPOGRAPHY_PROFILES = {
+    manual: {
+      id: 'manual',
+      label: 'Manual (use cfg values)',
+      settings: {},
+    },
+    'epic-title': {
+      id: 'epic-title',
+      label: 'Epic title card (Cinzel + wide tracking)',
+      settings: {
+        fontId: 'cinzel',
+        textSize: 0.12,
+        textDepth: 0.006,
+        spaceMultiplier: 2.4,
+        stackLineGap: 0.28,
+        revealStyle: 'bloom',
+      },
+    },
+    'modern-action': {
+      id: 'modern-action',
+      label: 'Modern action (Bebas Neue, tight spacing)',
+      settings: {
+        fontId: 'bebas-neue',
+        textSize: 0.14,
+        textDepth: 0.004,
+        spaceMultiplier: 1.65,
+        stackLineGap: 0.18,
+        revealStyle: 'slide-up',
+      },
+    },
+    'elegant-luxury': {
+      id: 'elegant-luxury',
+      label: 'Elegant luxury (Playfair, airy)',
+      settings: {
+        fontId: 'playfair-display',
+        textSize: 0.1,
+        textDepth: 0.003,
+        spaceMultiplier: 2.8,
+        stackLineGap: 0.32,
+        revealStyle: 'grow-up',
+      },
+    },
+    'sci-fi-tech': {
+      id: 'sci-fi-tech',
+      label: 'Sci-fi tech (Orbitron, balanced spacing)',
+      settings: {
+        fontId: 'orbitron',
+        textSize: 0.12,
+        textDepth: 0.0045,
+        spaceMultiplier: 1.9,
+        stackLineGap: 0.22,
+        revealStyle: 'grow-up',
+      },
+    },
+  };
+
+  function applyTypographyProfile(cfg = {}, profileId = DEFAULT_TYPOGRAPHY_PROFILE_ID) {
+    const activeId = TYPOGRAPHY_PROFILES[profileId]?.id || DEFAULT_TYPOGRAPHY_PROFILE_ID;
+    const patch = TYPOGRAPHY_PROFILES[activeId]?.settings || {};
+    const merged = { ...cfg, ...patch, typographyProfile: activeId };
+    return { profileId: activeId, cfg: merged };
+  }
+
   function parseScriptLines(rawLines = [], defaultProfileId = 'default') {
     const segments = [];
     let activeProfile = normalizeProfileToken(defaultProfileId);
@@ -215,6 +303,7 @@
     easeOutCubic,
     easeOutBack,
     damp,
+    isValidFontResource,
     computeCenterBounds,
     endBias,
     visibleHalfWidth,
@@ -226,5 +315,10 @@
     parseScriptLines,
     stripControlTokens,
     normalizeProfileToken,
+    normalizeTextAlign,
+    lineAlignmentOffset,
+    TYPOGRAPHY_PROFILES,
+    DEFAULT_TYPOGRAPHY_PROFILE_ID,
+    applyTypographyProfile,
   };
 });

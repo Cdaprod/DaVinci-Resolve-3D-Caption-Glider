@@ -13,6 +13,8 @@ This file applies to the entire repository.
 - Demo content should exercise the default-first script language (`#A/#B/#C`, `#default`, pauses/holds, and bold emphasis) so cinematic profiles stay verifiable in preview builds; keep `public/demo-lines.txt` aligned with the latest profile intent.
 - `[BREAK]` / `[BR=n]` tokens insert paragraph spacing before the next line; keep `paragraphGap` in sync with doc/UI defaults when adjusting layout rules.
 - Theme toggles must flip both background and text palettes (light default = white bg/black text, dark = black bg/white text) and persist through seeds/localStorage; keep defaults/seeds set to the light palette unless a test profile explicitly overrides it.
+- Typography presets now map to `docs/TYPOGRAPHY.md` (Epic/Modern/Luxury/Sci-Fi); keep the preset labels, font URLs, and spacing/depth defaults in sync across `public/index.html`, seeds, and README when making adjustments.
+- Line alignment (left/center/right) is configurable in the UI and advanced cfg; keep the dropdown labels, default (`center`), seeds, and README hints synchronized when tuning layout behavior.
 - Keep the UI responsive for portrait/landscape testing; updates to `public/index.html` should preserve the mobile-friendly width variable and collapsed transforms that avoid page scrolling.
 - Camera framing should keep the active/neighboring words visible: the dynamic FOV/distance framing logic in `public/index.html` must be preserved or improved so highlighted words never drift outside the viewport when spawned.
 - Terminal framing must finish with a right-of-center overhang: preserve the end-overhang blend so the camera clamps toward `maxX + endOverhangPx + endOverhangFactor × lastWidth` instead of re-centering on the final word.
@@ -23,3 +25,6 @@ This file applies to the entire repository.
 - The shared lighting rig lives in `public/lighting-rig.js` and is tested; adjust light/material specs there and keep the rig tests in sync when retuning shading or palette-dependent behavior.
 - The lighting rig now anchors key/fill lights to the scene and lifts near-black text colors for readability; keep palette updates and the rig tests aligned when tuning emissive/roughness values.
 - Text geometry uses `buildTextGeometrySpec` (in `public/animation-helpers.js`) to increase curve segments and add a subtle bevel for deeper extrusions; keep geometry defaults and helper tests aligned when retuning textDepth behavior.
+- The Python bridge now runs on FastAPI/uvicorn and serves `public/index.html`; keep the docker-compose include chain (`docker-compose.yaml` → `docker/docker-compose.yaml`) intact when adjusting dev workflows.
+- SRT exports land in `captions/` and should enqueue an import attempt; keep that directory as the default output for new endpoints or jobs.
+- The LAN captioner now lives in `app/main.py`; keep its file-serving allowlist and `CAPTIONER_PROJECTS_ROOT` contract in sync with docker compose bindings when extending the API.

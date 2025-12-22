@@ -1,0 +1,22 @@
+version: "3.9"
+
+services:
+  captioner:
+    build:
+      context: ..
+      dockerfile: ./docker/Dockerfile
+    command: uvicorn app.main:app --reload --host 0.0.0.0 --port 8791
+    working_dir: /app
+    ports:
+      - "8791:8791"
+    volumes:
+      - ..:/app
+      - ${CAPTIONER_PROJECTS_ROOT:-../Projects}:/data/projects
+    environment:
+      - CAPTIONER_PROJECTS_ROOT=/data/projects
+      - CAPTIONER_HOST=0.0.0.0
+      - CAPTIONER_PORT=8791
+      - CAPTIONER_CORS_ORIGINS=*
+      - CAPTIONER_MAX_UPLOAD_MB=4096
+      - MEDIA_SYNC_BASE_URL
+    restart: unless-stopped

@@ -1,0 +1,16 @@
+version: "3.9"
+
+services:
+  caption-glider:
+    build:
+      context: ..
+      dockerfile: ./docker/dockerfile
+    command: uvicorn main:app --reload --host 0.0.0.0 --port 8080
+    working_dir: /app
+    ports:
+      - "8080:8080"
+    volumes:
+      - ..:/app
+    environment:
+      - UVICORN_RELOAD_DIRS=/app
+    restart: unless-stopped

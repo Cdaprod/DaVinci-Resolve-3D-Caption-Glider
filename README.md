@@ -72,13 +72,25 @@ export PYTHONPATH="/opt/resolve/libs/Fusion/:$PYTHONPATH"
 
 ### 5. Run the Server
 
+Use FastAPI with uvicorn for hot reload during UI edits:
+
 ```bash
-python main.py
+uvicorn main:app --reload --host 0.0.0.0 --port 8080
 ```
 
 ### 6. Open in Browser
 
 Navigate to `http://localhost:8080` in your web browser.
+
+### 7. Docker Compose (optional)
+
+The root `docker-compose.yaml` includes the dev stack in `docker/docker-compose.yaml` so you can boot uvicorn with reload and serve `public/index.html` without touching your host Python:
+
+```bash
+docker compose up --build
+```
+
+Edit files locally and uvicorn will reload inside the container while keeping the `captions/` export folder on your host.
 
 ### 7. Testing helpers
 
@@ -86,6 +98,12 @@ Run the lightweight helper checks to confirm math helpers and clamping logic beh
 
 ```bash
 node tests/animation-helpers.test.js
+```
+
+Validate the FastAPI bridge and SRT export path with the built-in Python tests:
+
+```bash
+python -m unittest discover tests
 ```
 
 ## 🎮 Usage
@@ -223,8 +241,9 @@ Cinematic scripting starts in default (no marker required)
 
 ```
 resolve-3d-caption-glider/
-├── main.py                 # Flask server + Resolve API bridge
+├── main.py                 # FastAPI server + Resolve API bridge
 ├── requirements.txt        # Python dependencies
+├── docker/                 # Dockerfile + compose fragment for uvicorn hot reload
 ├── README.md              # This file
 ├── LICENSE                # MIT License
 └── public/
@@ -237,9 +256,12 @@ resolve-3d-caption-glider/
 |Endpoint                       |Method|Description                           |
 |-------------------------------|------|--------------------------------------|
 |`/api/get-transcription`       |GET   |Fetch transcription from selected clip|
+|`/api/transcribe-clip`         |POST  |Display Resolve transcription steps   |
+|`/api/export-transcript-lines` |POST  |Group words into caption-ready lines  |
 |`/api/create-animated-captions`|POST  |Create synced captions on timeline    |
-|`/api/timeline-info`           |GET   |Get current timeline metadata         |
-|`/api/export-srt`              |POST  |Export captions as SRT file           |
+|`/api/export-srt`              |POST  |Export SRT into `captions/` and queue import|
+
+`/api/export-srt` writes an `.srt` file to the repo-level `captions/` folder and immediately queues an import attempt into the active Resolve timeline. When Resolve isn't reachable, the job remains queued with a `blocked` message so you can retry once the scripting bridge is available.
 
 ## 🎨 Customization Examples
 
@@ -320,7 +342,7 @@ This project is licensed under the MIT License - see the <LICENSE> file for deta
 ## 🙏 Acknowledgments
 
 - Built with [Three.js](https://threejs.org/) for 3D rendering
-- [Flask](https://flask.palletsprojects.com/) for Python web framework
+- [FastAPI](https://fastapi.tiangolo.com/) with uvicorn for the Python bridge
 - DaVinci Resolve API by Blackmagic Design
 
 ## 📧 Support

@@ -31,6 +31,12 @@
       "project": "",
       "video": ""
     },
-    "wpl": 8
+    "wpl": 8,
+    "captionSource": {
+      "mode": "lines",
+      "mediaUrl": "",
+      "applyOffset": true,
+      "offsetMs": 0
+    }
   }
 }

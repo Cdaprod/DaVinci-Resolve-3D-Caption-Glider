@@ -109,6 +109,9 @@
     #ui input[type="checkbox"] { transform: translateY(1px); }
     #ui .row { display:flex; gap:8px; }
     #ui .row button { width: 50%; }
+    #ui .row.tight button { width: auto; flex: 1; }
+    #ui .row.wrap { flex-wrap: wrap; }
+    #ui .row.wrap button { flex: 1 1 48%; }
 
     #status {
       margin-top: 8px;
@@ -215,6 +218,94 @@
       color: #06141a;
     }
 
+    .panel {
+      margin-top: 10px;
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 12px;
+      padding: 10px;
+      background: rgba(255,255,255,0.03);
+    }
+
+    .panel h4 {
+      margin: 0 0 8px;
+      font-size: 12px;
+      font-weight: 800;
+      opacity: 0.9;
+    }
+
+    .panel .muted {
+      opacity: 0.7;
+      font-size: 11px;
+    }
+
+    .panel .caption-box {
+      margin-top: 8px;
+      padding: 8px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(0,0,0,0.35);
+      font-size: 12px;
+      line-height: 1.3;
+      white-space: pre-wrap;
+      min-height: 44px;
+    }
+
+    .panel .inline-input {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .panel input[type="text"],
+    .panel input[type="number"] {
+      width: 100%;
+      padding: 8px 8px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(0,0,0,0.30);
+      color: #fff;
+      outline: none;
+    }
+
+    .panel .radio-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+
+    .panel .radio-row label {
+      margin: 0;
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      font-weight: 700;
+      background: rgba(0,0,0,0.2);
+      border-radius: 8px;
+      padding: 6px;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .panel .progress {
+      margin-top: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.12);
+      overflow: hidden;
+    }
+
+    .panel .progress span {
+      display: block;
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #00ccff, #4caf50);
+      transition: width 120ms ease;
+    }
+
+    .panel .link {
+      color: #7fe9ff;
+      word-break: break-all;
+    }
+
     @media (max-width: 900px) {
       :root { --ui-width: clamp(280px, 44vw, 360px); }
       #ui { right: 8px; top: 8px; max-height: calc(100vh - 16px); }
@@ -264,14 +355,71 @@
       <small id="workspaceStatus">Pick a project to list media.</small>
     </details>
 
+    <div class="panel" id="captionSourcePanel">
+      <h4>Caption Source</h4>
+      <div class="radio-row">
+        <label><input type="radio" name="captionSource" value="lines" checked /> Lines</label>
+        <label><input type="radio" name="captionSource" value="srt" /> SRT</label>
+        <label><input type="radio" name="captionSource" value="cues" /> Cues</label>
+      </div>
+      <label>
+        Media URL (for SRT/Cues)
+        <input id="mediaUrlInput" type="text" placeholder="http://192.168.0.25:8787/media/.../clip.mp4" />
+      </label>
+      <div class="row tight">
+        <button id="btnLoadCaptionSource">Load Caption Source</button>
+        <button id="btnClearCaptionSource">Clear</button>
+      </div>
+      <small class="muted">Lines mode uses cfg.linesUrl. SRT/Cues mode resolves from the media URL.</small>
+    </div>
+
+    <div class="panel" id="timelinePanel">
+      <h4>Timeline</h4>
+      <div class="inline-input">
+        <div id="timelineTimecode">00:00.000</div>
+        <div class="muted" id="timelineDuration">/ 00:00.000</div>
+      </div>
+      <input id="timelineRange" type="range" min="0" max="1000" step="1" value="0" />
+      <div class="row tight">
+        <button id="btnTimelinePlay">Play</button>
+        <button id="btnTimelinePause">Pause</button>
+        <button id="btnTimelineReplay">Replay</button>
+      </div>
+      <div class="caption-box" id="activeCaptionPreview">Active caption will appear here.</div>
+    </div>
+
+    <div class="panel" id="syncPanel">
+      <h4>Sync</h4>
+      <label style="display:flex; align-items:center; gap:8px;">
+        <input id="applyOffset" type="checkbox" />
+        Apply offset
+      </label>
+      <label>
+        Offset (ms)
+        <input id="offsetMsInput" type="number" step="10" value="0" />
+      </label>
+      <div class="row tight">
+        <button id="offsetBack">-250ms</button>
+        <button id="offsetForward">+250ms</button>
+      </div>
+      <small class="muted">Use offsets to sync captions with playback or Resolve timing.</small>
+    </div>
+
+    <div class="panel" id="exportPanel">
+      <h4>Export</h4>
+      <button id="btnRenderVertical">Render Vertical (server)</button>
+      <div class="row">
+        <button id="btnRecord">Record (WebM)</button>
+        <button id="btnStop">Stop</button>
+      </div>
+      <div class="progress"><span id="renderProgress"></span></div>
+      <div class="muted" id="renderStatus">Server render job idle.</div>
+      <a id="renderDownload" class="link" target="_blank" rel="noopener"></a>
+    </div>
+
       <button id="btnLoad">Load from Resolve</button>
       <button id="btnReplay">Replay</button>
       <button id="btnCreate">Create Captions in Resolve</button>
-
-    <div class="row">
-      <button id="btnRecord">Record (WebM)</button>
-      <button id="btnStop">Stop</button>
-    </div>
 
     <label>
       Words per line: <span id="wplVal">8</span>
@@ -422,6 +570,13 @@
     stackMaxLines: 6,
 
     paragraphGap: 0.32
+  });
+
+  const DEFAULT_CAPTION_SOURCE = Object.freeze({
+    mode: 'lines',
+    mediaUrl: '',
+    applyOffset: true,
+    offsetMs: 0,
   });
 
   const STORAGE_KEY = 'captioner_state_v1';
@@ -659,6 +814,17 @@
   let fontRef = null;
   const WORKSPACE_DEFAULT = Object.freeze({ project: '', video: '' });
   let workspaceState = { ...WORKSPACE_DEFAULT };
+  let captionSourceState = { ...DEFAULT_CAPTION_SOURCE };
+  let timelineState = {
+    durationMs: 0,
+    currentMs: 0,
+    isPlaying: false,
+    activeIndex: -1,
+  };
+  let timelineLines = [];
+  let timelineLineSource = [];
+  let timelineRafId = null;
+  let timelineLastTick = null;
 
   let stackedLineCount = 0;
   const stackedGroups = [];
@@ -675,6 +841,25 @@
   const videoSelect = document.getElementById('videoSelect');
   const btnGenerateCaptions = document.getElementById('btnGenerateCaptions');
   const workspaceStatusEl = document.getElementById('workspaceStatus');
+  const captionSourceRadios = Array.from(document.querySelectorAll('input[name="captionSource"]'));
+  const mediaUrlInput = document.getElementById('mediaUrlInput');
+  const btnLoadCaptionSource = document.getElementById('btnLoadCaptionSource');
+  const btnClearCaptionSource = document.getElementById('btnClearCaptionSource');
+  const timelineTimecodeEl = document.getElementById('timelineTimecode');
+  const timelineDurationEl = document.getElementById('timelineDuration');
+  const timelineRangeEl = document.getElementById('timelineRange');
+  const btnTimelinePlay = document.getElementById('btnTimelinePlay');
+  const btnTimelinePause = document.getElementById('btnTimelinePause');
+  const btnTimelineReplay = document.getElementById('btnTimelineReplay');
+  const activeCaptionPreview = document.getElementById('activeCaptionPreview');
+  const applyOffsetEl = document.getElementById('applyOffset');
+  const offsetMsInput = document.getElementById('offsetMsInput');
+  const offsetBackBtn = document.getElementById('offsetBack');
+  const offsetForwardBtn = document.getElementById('offsetForward');
+  const btnRenderVertical = document.getElementById('btnRenderVertical');
+  const renderProgressEl = document.getElementById('renderProgress');
+  const renderStatusEl = document.getElementById('renderStatus');
+  const renderDownloadEl = document.getElementById('renderDownload');
   const wplEl = document.getElementById('wpl');
   const wplValEl = document.getElementById('wplVal');
   const ohEl = document.getElementById('oh');
@@ -758,6 +943,78 @@
   });
 
   btnGenerateCaptions?.addEventListener('click', () => generateWorkspaceCaptions());
+
+  captionSourceRadios.forEach(radio => {
+    radio.addEventListener('change', () => {
+      if (!radio.checked) return;
+      setCaptionSourceMode(radio.value);
+    });
+  });
+
+  mediaUrlInput?.addEventListener('input', () => {
+    captionSourceState.mediaUrl = mediaUrlInput.value || '';
+    persistState();
+  });
+
+  btnLoadCaptionSource?.addEventListener('click', () => loadCaptionSource());
+
+  btnClearCaptionSource?.addEventListener('click', () => {
+    captionSourceState.mediaUrl = '';
+    mediaUrlInput.value = '';
+    persistState();
+    setStatus('Cleared caption source media URL.');
+  });
+
+  timelineRangeEl?.addEventListener('input', () => {
+    stopTimelinePlayback();
+    setTimelineTime(Number(timelineRangeEl.value) || 0);
+  });
+
+  btnTimelinePlay?.addEventListener('click', () => playTimelinePlayback());
+  btnTimelinePause?.addEventListener('click', () => stopTimelinePlayback());
+  btnTimelineReplay?.addEventListener('click', () => {
+    stopTimelinePlayback();
+    setTimelineTime(0);
+    playTimelinePlayback();
+  });
+
+  applyOffsetEl?.addEventListener('change', () => {
+    captionSourceState.applyOffset = !!applyOffsetEl.checked;
+    persistState();
+    renderTimelineFrame();
+  });
+
+  offsetMsInput?.addEventListener('input', () => {
+    captionSourceState.offsetMs = Number(offsetMsInput.value) || 0;
+    persistState();
+    renderTimelineFrame();
+  });
+
+  offsetBackBtn?.addEventListener('click', () => {
+    captionSourceState.offsetMs = (Number(captionSourceState.offsetMs) || 0) - 250;
+    offsetMsInput.value = String(captionSourceState.offsetMs);
+    persistState();
+    renderTimelineFrame();
+  });
+
+  offsetForwardBtn?.addEventListener('click', () => {
+    captionSourceState.offsetMs = (Number(captionSourceState.offsetMs) || 0) + 250;
+    offsetMsInput.value = String(captionSourceState.offsetMs);
+    persistState();
+    renderTimelineFrame();
+  });
+
+  btnRenderVertical?.addEventListener('click', async () => {
+    resetRenderStatus();
+    const projectId = projectSelect?.value || '';
+    const videoRel = videoSelect?.value || '';
+    if (!projectId || !videoRel) {
+      renderStatusEl.textContent = 'Select a project + video to render.';
+      return;
+    }
+
+    renderStatusEl.textContent = 'Render job endpoint not configured.';
+  });
 
   function populateFontPresets() {
     fontSelect.innerHTML = '';
@@ -960,6 +1217,12 @@
           project: workspaceState.project || '',
           video: workspaceState.video || '',
         },
+        captionSource: {
+          mode: captionSourceState.mode,
+          mediaUrl: captionSourceState.mediaUrl,
+          applyOffset: !!captionSourceState.applyOffset,
+          offsetMs: Number(captionSourceState.offsetMs) || 0,
+        },
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     } catch (_) {}
@@ -978,6 +1241,16 @@
     if (payload.workspace && typeof payload.workspace === 'object') {
       if (typeof payload.workspace.project === 'string') workspaceState.project = payload.workspace.project;
       if (typeof payload.workspace.video === 'string') workspaceState.video = payload.workspace.video;
+    }
+
+    if (payload.captionSource && typeof payload.captionSource === 'object') {
+      captionSourceState = {
+        ...captionSourceState,
+        mode: payload.captionSource.mode || captionSourceState.mode,
+        mediaUrl: payload.captionSource.mediaUrl || captionSourceState.mediaUrl,
+        applyOffset: payload.captionSource.applyOffset !== undefined ? !!payload.captionSource.applyOffset : captionSourceState.applyOffset,
+        offsetMs: Number(payload.captionSource.offsetMs) || 0,
+      };
     }
 
     if (typeof payload.wpl === 'number' && isFinite(payload.wpl)) {
@@ -1002,6 +1275,12 @@
       applyTextAlignSelection(cfg.textAlign, { silent: true });
       applyTheme(cfg.theme);
       syncWorkspaceInputs();
+
+      setCaptionSourceMode(captionSourceState.mode);
+      mediaUrlInput.value = captionSourceState.mediaUrl || '';
+      applyOffsetEl.checked = !!captionSourceState.applyOffset;
+      offsetMsInput.value = String(captionSourceState.offsetMs || 0);
+      updateTimelineDisplay();
     }
 
   async function hydrateState() {
@@ -1111,6 +1390,7 @@
       workspaceState.project = projectId;
       workspaceState.video = videoRel;
       transcriptionData = null;
+      setCaptionSourceMode('lines');
       persistState();
 
       const lines = await loadLines(cfg.linesUrl);
@@ -1121,6 +1401,317 @@
       replay();
     } catch (err) {
       setWorkspaceStatus('Generate failed.');
+    }
+  }
+
+  function setCaptionSourceMode(mode) {
+    captionSourceState.mode = mode;
+    captionSourceRadios.forEach(radio => {
+      radio.checked = radio.value === mode;
+    });
+    const needsMedia = mode === 'srt' || mode === 'cues';
+    mediaUrlInput.disabled = !needsMedia;
+    btnLoadCaptionSource.disabled = false;
+    if (!needsMedia) {
+      stopTimelinePlayback();
+      timelineLines = [];
+      timelineLineSource = [];
+      timelineState.durationMs = 0;
+      setTimelineTime(0, { silent: true });
+      setActiveCaptionPreview('');
+    }
+    persistState();
+  }
+
+  function updateTimelineDisplay() {
+    timelineTimecodeEl.textContent = formatTimecode(timelineState.currentMs);
+    timelineDurationEl.textContent = `/ ${formatTimecode(timelineState.durationMs)}`;
+    const max = Math.max(1, Math.floor(timelineState.durationMs));
+    timelineRangeEl.max = String(max);
+    timelineRangeEl.value = String(Math.min(max, Math.floor(timelineState.currentMs)));
+  }
+
+  function setTimelineTime(ms, { silent = false } = {}) {
+    timelineState.currentMs = Math.max(0, Math.min(timelineState.durationMs, Number(ms) || 0));
+    updateTimelineDisplay();
+    if (!silent && (captionSourceState.mode === 'srt' || captionSourceState.mode === 'cues')) {
+      renderTimelineFrame();
+    }
+  }
+
+  function getEffectiveOffsetMs() {
+    return captionSourceState.applyOffset ? (Number(captionSourceState.offsetMs) || 0) : 0;
+  }
+
+  function setActiveCaptionPreview(text) {
+    activeCaptionPreview.textContent = text || 'Active caption will appear here.';
+  }
+
+  function stopTimelinePlayback() {
+    timelineState.isPlaying = false;
+    if (timelineRafId) {
+      cancelAnimationFrame(timelineRafId);
+      timelineRafId = null;
+    }
+    timelineLastTick = null;
+  }
+
+  function playTimelinePlayback() {
+    if (!timelineLines.length) {
+      setStatus('No timeline captions loaded.');
+      return;
+    }
+    if (timelineState.isPlaying) return;
+    timelineState.isPlaying = true;
+    timelineLastTick = performance.now();
+
+    const tick = (now) => {
+      if (!timelineState.isPlaying) return;
+      const dt = Math.max(0, now - (timelineLastTick || now));
+      timelineLastTick = now;
+      setTimelineTime(timelineState.currentMs + dt, { silent: true });
+      renderTimelineFrame(now);
+      if (timelineState.currentMs >= timelineState.durationMs) {
+        stopTimelinePlayback();
+        return;
+      }
+      timelineRafId = requestAnimationFrame(tick);
+    };
+
+    timelineRafId = requestAnimationFrame(tick);
+  }
+
+  function clearTimelineScene() {
+    clearAllLinesFromScene();
+    timelineState.activeIndex = -1;
+    render();
+  }
+
+  function getActiveTimelineIndex(timeSec, lines) {
+    for (let i = 0; i < lines.length; i++) {
+      if (timeSec >= lines[i].startTime && timeSec <= lines[i].endTime) return i;
+    }
+    return -1;
+  }
+
+  function resetLineRevealState(lineObj) {
+    if (!lineObj?.meshes) return;
+    lineObj.cameraState = null;
+    lineObj.lastRenderAt = null;
+    for (const mesh of lineObj.meshes) {
+      mesh.visible = false;
+      mesh.material.opacity = 0;
+      mesh.userData.revealStart = null;
+      mesh.userData.revealed = false;
+      mesh.scale.setScalar(1);
+      mesh.position.copy(mesh.userData.basePos);
+    }
+  }
+
+  function ensureActiveTimelineLine(index) {
+    if (index === timelineState.activeIndex) return;
+    clearAllLinesFromScene();
+    timelineState.activeIndex = index;
+    if (index < 0) return;
+    const lineObj = timelineLines[index];
+    if (!lineObj) return;
+    lineObj.group.position.y = 0;
+    resetLineRevealState(lineObj);
+    scene.add(lineObj.group);
+  }
+
+  function renderLineAtTime(lineObj, currentTimeSec, now) {
+    if (!lineObj) return;
+    const { meshes, centers, widths, words, startTime, endTime, group, emphasisFlags } = lineObj;
+    const n = centers.length;
+    if (n === 0) return;
+
+    const emphasisProfile = getEmphasisProfile();
+    const lineProfile = lineObj.profileSettings || getLineProfile(lineObj.profileId);
+    const activeRevealStyle = lineObj.revealStyleOverride || lineProfile?.revealStyle || cfg.revealStyle;
+    for (const m of meshes) m.userData.revealStyle = activeRevealStyle;
+
+    const durationSec = Math.max(0.05, (endTime - startTime));
+    const uRaw = clamp01((currentTimeSec - startTime) / durationSec);
+    const eased = smooth01(uRaw);
+    const u = easeOutEndU(eased);
+
+    const c2 = centersWithGroupY(centers, group.position.y);
+    const curve = new THREE.CatmullRomCurve3(c2, false, 'catmullrom', 0.5);
+    const bounds = computeCenterBounds(c2);
+    const ARC_SAMPLES = Math.max(320, n * 120);
+    const lengths = curve.getLengths(ARC_SAMPLES);
+    const totalLen = lengths[lengths.length - 1];
+
+    const dist = u * totalLen;
+    let idx = 0;
+    while (idx < lengths.length && lengths[idx] < dist) idx++;
+    const denom = Math.max(1, lengths.length - 1);
+    const t = idx / denom;
+    const activeIdx = computeActiveWordIndex(Array.isArray(words) && words.length === meshes.length ? words : null, currentTimeSec, uRaw, n);
+    const activeProgress = (typeof activeIdx === 'number' && activeIdx >= 0)
+      ? clamp01(activeIdx / Math.max(1, n - 1))
+      : 0;
+    const adjustedLookAhead = Math.max(0, cfg.curveLookAheadU + (lineProfile?.lookAheadOffset ?? 0)) * (0.32 + 0.28 * activeProgress);
+    const t2 = Math.min(1, t + adjustedLookAhead);
+    const isEmphasis = activeIdx >= 0 && Array.isArray(emphasisFlags) && emphasisFlags[activeIdx];
+    const isTerminal = activeIdx === (n - 1);
+    const bias = computeEmphasisBias(emphasisProfile, activeIdx, emphasisFlags, widths, uRaw) + (lineProfile?.endBiasPx ?? 0);
+
+    let target = curve.getPointAt(t2);
+    const focus = (activeIdx >= 0 && activeIdx < c2.length) ? c2[activeIdx] : null;
+    if (focus) {
+      const blend = Math.min(0.72, 0.28 + (isEmphasis ? 0.10 : 0) + (isTerminal ? 0.12 : 0));
+      target.lerp(focus, blend);
+    }
+    target = shapeTargetWithBounds(target, uRaw, c2, widths, bounds, bias);
+
+    const dt = Math.max(0.001, ((now || performance.now()) - (lineObj.lastRenderAt || performance.now())) / 1000);
+    lineObj.lastRenderAt = now || performance.now();
+
+    const followLambda = cfg.followLambda * (lineProfile?.followMult ?? 1);
+    const lookLambda = cfg.lookAtLambda * (lineProfile?.lookAtMult ?? 1);
+    const baseCamDistance = cfg.cameraDistance + (lineProfile?.cameraDistanceOffset ?? 0);
+    if (!lineObj.cameraState) {
+      lineObj.cameraState = {
+        camX: camera.position.x,
+        camY: camera.position.y,
+        lookAtX: camera.position.x,
+        lookAtY: camera.position.y,
+        camDistance: baseCamDistance,
+        targetX: camera.position.x,
+        targetY: camera.position.y,
+      };
+    }
+    const state = lineObj.cameraState;
+    const targetLambda = Math.max(0.1, followLambda * 1.05);
+    state.targetX = damp(state.targetX, target.x, targetLambda, dt);
+    state.targetY = damp(state.targetY, target.y, targetLambda, dt);
+
+    if (Array.isArray(words) && words.length === meshes.length) {
+      for (let k = 0; k < words.length; k++) {
+        if (currentTimeSec >= Number(words[k].startTime ?? 0)) startReveal(meshes[k], now || performance.now());
+      }
+    } else {
+      const p = uRaw * (n - 1);
+      const revealIdx = Math.min(n - 1, Math.floor(p + cfg.revealWordLead));
+      for (let k = 0; k <= revealIdx; k++) startReveal(meshes[k], now || performance.now());
+    }
+
+    for (const m of meshes) tickReveal(m, now || performance.now());
+
+    updateActiveHighlight(meshes, activeIdx, emphasisProfile, dt);
+
+    const followScale = (isEmphasis ? (emphasisProfile?.emphasisFollowMult ?? 1) : 1) * (isTerminal ? (emphasisProfile?.terminalFollowMult ?? 1) : 1);
+    const lookScale = (isEmphasis ? (emphasisProfile?.emphasisLookAtMult ?? 1) : 1) * (isTerminal ? (emphasisProfile?.terminalLookAtMult ?? 1) : 1);
+
+    const camLambda = Math.max(0.08, followLambda * followScale * 0.9);
+    state.camX = damp(state.camX, state.targetX, camLambda, dt);
+    state.camY = damp(state.camY, state.targetY, camLambda, dt);
+
+    const desiredDistance = frameCameraDistance(baseCamDistance, activeIdx, widths, bounds);
+    state.camDistance = damp(state.camDistance, desiredDistance, Math.max(2.5, followLambda * 0.55), dt);
+
+    const lookTargetLambda = Math.max(0.08, lookLambda * lookScale * 0.9);
+    state.lookAtX = damp(state.lookAtX, state.targetX, lookTargetLambda, dt);
+    state.lookAtY = damp(state.lookAtY, state.targetY, lookTargetLambda, dt);
+
+    camera.position.set(state.camX, state.camY, state.camDistance);
+    camera.lookAt(state.lookAtX, state.lookAtY, target.z);
+    renderer.render(scene, camera);
+  }
+
+  function renderTimelineFrame(now) {
+    if (captionSourceState.mode !== 'srt' && captionSourceState.mode !== 'cues') return;
+    if (!timelineLines.length) {
+      clearTimelineScene();
+      setActiveCaptionPreview('');
+      return;
+    }
+    const offsetMs = getEffectiveOffsetMs();
+    const currentSec = (timelineState.currentMs + offsetMs) / 1000;
+    const activeIndex = getActiveTimelineIndex(currentSec, timelineLines);
+    ensureActiveTimelineLine(activeIndex);
+    if (activeIndex < 0) {
+      setActiveCaptionPreview('');
+      render();
+      return;
+    }
+    const activeLine = timelineLines[activeIndex];
+    setActiveCaptionPreview(activeLine?.text || '');
+    renderLineAtTime(activeLine, currentSec, now);
+  }
+
+  function resetRenderStatus() {
+    renderProgressEl.style.width = '0%';
+    renderStatusEl.textContent = 'Server render job idle.';
+    renderDownloadEl.textContent = '';
+    renderDownloadEl.href = '';
+  }
+
+  async function loadCaptionSource() {
+    const mode = captionSourceState.mode;
+    const mediaUrl = captionSourceState.mediaUrl.trim();
+    if (mode === 'lines') {
+      transcriptionData = null;
+      timelineLines = [];
+      timelineLineSource = [];
+      timelineState.durationMs = 0;
+      setTimelineTime(0, { silent: true });
+      await replay();
+      return;
+    }
+
+    if (!mediaUrl) {
+      setStatus('Enter a media URL for SRT/Cues mode.');
+      return;
+    }
+
+    transcriptionData = null;
+
+    setStatus(`Loading ${mode.toUpperCase()} captions…`);
+    try {
+      let cues = [];
+      if (mode === 'cues') {
+        const res = await fetch(`/api/captions/cues?media_url=${encodeURIComponent(mediaUrl)}`, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`Cues fetch failed: ${res.status}`);
+        const payload = await res.json();
+        cues = Array.isArray(payload.cues) ? payload.cues : [];
+      } else {
+        const res = await fetch(`/api/captions/srt?media_url=${encodeURIComponent(mediaUrl)}`, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`SRT fetch failed: ${res.status}`);
+        const srtText = await res.text();
+        cues = AnimationHelpers.parseSrtCues?.(srtText) || [];
+      }
+
+      const normalized = cues.map((cue) => {
+        const startMs = Number(cue.startMs ?? 0);
+        const endMs = Number(cue.endMs ?? startMs);
+        const words = AnimationHelpers.buildCueWordTimings?.(cue.text || '', startMs, endMs) || [];
+        return {
+          text: String(cue.text || '').trim(),
+          startTime: startMs / 1000,
+          endTime: endMs / 1000,
+          words,
+        };
+      }).filter(item => item.text);
+
+      if (!normalized.length) {
+        setStatus('No cues found for this media URL.');
+        return;
+      }
+
+      if (!fontRef) fontRef = await loadFontFromSelection();
+      buildFromTimedLines(fontRef, normalized);
+      timelineLineSource = normalized;
+      timelineLines = lineObjs;
+      timelineState.durationMs = Math.max(0, Math.max(...normalized.map(item => item.endTime * 1000)));
+      setTimelineTime(0, { silent: true });
+      clearAllLinesFromScene();
+      setStatus(`Loaded ${normalized.length} cues from ${mode.toUpperCase()} source.`);
+      renderTimelineFrame();
+    } catch (err) {
+      setStatus(`Caption source load failed:\n${String(err)}`);
     }
   }
 
@@ -1216,6 +1807,15 @@
       bias += activeWidth * (profile.terminalDriftFrac ?? 0) * settle;
     }
     return bias;
+  }
+
+  function formatTimecode(ms) {
+    const safe = Math.max(0, Number(ms) || 0);
+    const totalSeconds = Math.floor(safe / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    const millis = Math.floor(safe % 1000);
+    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(millis).padStart(3, '0')}`;
   }
 
   const parseScriptLines = (window.AnimationHelpers && typeof window.AnimationHelpers.parseScriptLines === 'function')
@@ -2196,6 +2796,13 @@ ${String(err)}`);
 
       clearAllLinesFromScene();
 
+      if (captionSourceState.mode === 'srt' || captionSourceState.mode === 'cues') {
+        await loadCaptionSource();
+        setTimelineTime(0);
+        playTimelinePlayback();
+        return;
+      }
+
       if (transcriptionData && Array.isArray(transcriptionData.words) && transcriptionData.words.length) {
         const wpl = Number(wplEl.value);
         const timedLines = transcriptionToTimedLines(transcriptionData, wpl);
@@ -2497,6 +3104,12 @@ ${String(err)}`);
       return;
     }
 
+    if ((captionSourceState.mode === 'srt' || captionSourceState.mode === 'cues') && timelineLineSource.length) {
+      buildFromTimedLines(fontRef, timelineLineSource);
+      timelineLines = lineObjs;
+      return;
+    }
+
     const lines = await loadLines(cfg.linesUrl);
     buildFromPlainLines(fontRef, lines);
   }
@@ -2532,6 +3145,7 @@ ${String(err)}`);
     }
 
     transcriptionData = data;
+    setCaptionSourceMode('lines');
     const wpl = Number(wplEl.value);
     const timedLines = transcriptionToTimedLines(data, wpl);
 
@@ -2591,6 +3205,11 @@ ${String(err)}`);
 
       applyTextAlignSelection(cfg.textAlign, { silent: true });
       applyTheme(cfg.theme);
+      setCaptionSourceMode(captionSourceState.mode);
+      mediaUrlInput.value = captionSourceState.mediaUrl || '';
+      applyOffsetEl.checked = !!captionSourceState.applyOffset;
+      offsetMsInput.value = String(captionSourceState.offsetMs || 0);
+      updateTimelineDisplay();
 
     const font = await loadFontFromSelection();
 

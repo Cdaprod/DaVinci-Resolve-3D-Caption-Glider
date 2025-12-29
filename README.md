@@ -39,6 +39,11 @@ Key endpoints on port `8791`:
 
 Optional: set `MEDIA_SYNC_BASE_URL` to post the generated `.srt` to media-sync’s Resolve import endpoint; failures are logged without breaking caption generation.
 
+UI additions:
+- Caption Source panel lets you switch between legacy Lines mode and SRT/Cues mode driven by `/api/captions/*`.
+- Timeline controls add a playhead, scrub slider, and active caption preview for timed captions.
+- Sync controls apply a millisecond offset when cues need nudging.
+
 ## 🧪 Testing
 
 - Python API and path safety: `python -m pytest`

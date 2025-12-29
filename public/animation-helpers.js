@@ -137,6 +137,78 @@
     return { text: out.trim(), pauseMs, holdMs, breaks };
   }
 
+  function parseSrtCues(srtText = '') {
+    if (!srtText) return [];
+    const text = String(srtText)
+      .replace(/^\uFEFF/, '')
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n')
+      .trim();
+    if (!text) return [];
+
+    const blocks = text.split(/\n{2,}/).map(block => block.trim()).filter(Boolean);
+    const cues = [];
+    const timingPattern = /^(\d{2}:\d{2}:\d{2},\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2},\d{3})/;
+
+    const toMs = (ts) => {
+      const [hh, mm, rest] = ts.split(':');
+      const [ss, ms] = rest.split(',');
+      return (((Number(hh) * 60 + Number(mm)) * 60) + Number(ss)) * 1000 + Number(ms);
+    };
+
+    for (const block of blocks) {
+      const lines = block.split('\n');
+      if (!lines.length) continue;
+      const idxLine = lines[0].trim();
+      const hasIndex = /^\d+$/.test(idxLine);
+      const timingLine = hasIndex ? (lines[1] || '').trim() : idxLine;
+      const match = timingPattern.exec(timingLine);
+      if (!match) continue;
+
+      const startMs = toMs(match[1]);
+      const endMs = toMs(match[2]);
+      const captionLines = lines.slice(hasIndex ? 2 : 1).map(l => l.trim()).filter(Boolean);
+      const text = captionLines.join('\n');
+
+      cues.push({ startMs, endMs, text });
+    }
+
+    cues.sort((a, b) => a.startMs - b.startMs);
+    return cues;
+  }
+
+  function buildCueWordTimings(text = '', startMs = 0, endMs = 0) {
+    const tokens = String(text || '').split(/\s+/).filter(Boolean);
+    if (!tokens.length) return [];
+    const duration = Math.max(0, Number(endMs) - Number(startMs));
+    if (duration <= 0) {
+      return tokens.map(token => ({
+        text: token,
+        startTime: startMs / 1000,
+        endTime: startMs / 1000,
+      }));
+    }
+
+    const weights = tokens.map(token => Math.max(1, token.replace(/[^\w]/g, '').length || token.length));
+    const totalWeight = weights.reduce((sum, w) => sum + w, 0) || tokens.length;
+    let cursor = Number(startMs);
+    const words = [];
+
+    for (let i = 0; i < tokens.length; i++) {
+      const slice = (weights[i] / totalWeight) * duration;
+      const wordStart = cursor;
+      const wordEnd = (i === tokens.length - 1) ? Number(endMs) : cursor + slice;
+      words.push({
+        text: tokens[i],
+        startTime: wordStart / 1000,
+        endTime: wordEnd / 1000,
+      });
+      cursor = wordEnd;
+    }
+
+    return words;
+  }
+
   function sanitizePersistedState(defaults = {}, stored = {}) {
     const base = (defaults && typeof defaults === 'object') ? defaults : {};
     const src = (stored && typeof stored === 'object') ? stored : {};
@@ -314,6 +386,8 @@
     normalizePersistedPayload,
     parseScriptLines,
     stripControlTokens,
+    parseSrtCues,
+    buildCueWordTimings,
     normalizeProfileToken,
     normalizeTextAlign,
     lineAlignmentOffset,

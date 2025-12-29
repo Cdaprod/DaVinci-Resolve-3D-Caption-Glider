@@ -15,7 +15,7 @@ const {
   normalizeProfileToken,
   visibleHalfWidth,
   requiredDistanceForSpan,
-  sanitizePersistedState,
+    sanitizePersistedState,
     normalizePersistedPayload,
     buildTextGeometrySpec,
     TYPOGRAPHY_PROFILES,
@@ -24,6 +24,8 @@ const {
     isValidFontResource,
     normalizeTextAlign,
     lineAlignmentOffset,
+    parseSrtCues,
+    buildCueWordTimings,
   } = require('../public/animation-helpers');
 
 function testClamp01() {
@@ -275,6 +277,32 @@ function testNormalizePersistedPayload() {
   assert.strictEqual(normalizePersistedPayload(5), null);
 }
 
+function testParseSrtCues() {
+  const srt = [
+    '1',
+    '00:00:01,000 --> 00:00:02,500',
+    'Hello world',
+    '',
+    '2',
+    '00:00:03,000 --> 00:00:04,000',
+    'Second line',
+    '',
+  ].join('\n');
+  const cues = parseSrtCues(srt);
+  assert.strictEqual(cues.length, 2);
+  assert.deepStrictEqual(cues[0], { startMs: 1000, endMs: 2500, text: 'Hello world' });
+  assert.deepStrictEqual(cues[1], { startMs: 3000, endMs: 4000, text: 'Second line' });
+}
+
+function testBuildCueWordTimings() {
+  const words = buildCueWordTimings('Hello world', 0, 1000);
+  assert.strictEqual(words.length, 2);
+  assert.strictEqual(words[0].text, 'Hello');
+  assert.strictEqual(words[1].text, 'world');
+  assert(words[0].startTime >= 0);
+  assert(words[1].endTime <= 1);
+}
+
 function testSeedFilesAreCleanObjects() {
   const seeds = [
     path.join(__dirname, '..', 'public', 'localStorage.json'),
@@ -292,6 +320,8 @@ function testSeedFilesAreCleanObjects() {
       assert.strictEqual(typeof data.captioner_state_v1.cfg.typographyProfile, 'string', `${seedPath} typographyProfile should be string`);
       assert.strictEqual(typeof data.captioner_state_v1.cfg.textAlign, 'string', `${seedPath} textAlign should be string`);
       assert.strictEqual(typeof data.captioner_state_v1.cfg.paragraphGap, 'number', `${seedPath} paragraphGap should be numeric`);
+      assert.strictEqual(typeof data.captioner_state_v1.captionSource, 'object', `${seedPath} captionSource should be an object`);
+      assert.strictEqual(typeof data.captioner_state_v1.captionSource.mode, 'string', `${seedPath} captionSource.mode should be string`);
     }
   }
 
@@ -346,6 +376,8 @@ function run() {
   testTypographyProfiles();
   testSanitizePersistedState();
   testNormalizePersistedPayload();
+  testParseSrtCues();
+  testBuildCueWordTimings();
   testSeedFilesAreCleanObjects();
   testSeedThemesMatchPalettes();
   console.log('animation-helpers: all tests passed');

@@ -104,3 +104,46 @@ def test_generate_captions_blocks_traversal(tmp_path, monkeypatch):
         json={"video_rel_path": "../bad.mp4"},
     )
     assert resp.status_code == 400
+
+
+def test_derive_srt_url_captions_dir(tmp_path, monkeypatch):
+    client, mod = build_client(tmp_path, monkeypatch)
+    url = "http://192.168.0.25:8787/media/Proj/ingest/originals/demo.mp4?source=primary"
+    expected = "http://192.168.0.25:8787/media/Proj/captions/demo.srt"
+    assert mod.derive_srt_url(url, "captions_dir") == expected
+
+
+def test_parse_srt_outputs_cues(tmp_path, monkeypatch):
+    client, mod = build_client(tmp_path, monkeypatch)
+    srt_text = "1\n00:00:00,000 --> 00:00:01,000\nHello\n\n2\n00:00:02,000 --> 00:00:03,000\nWorld\n"
+    cues = mod.parse_srt(srt_text)
+    assert cues == [
+        {"startMs": 0, "endMs": 1000, "text": "Hello"},
+        {"startMs": 2000, "endMs": 3000, "text": "World"},
+    ]
+
+
+def test_captions_endpoints_return_expected_payloads(tmp_path, monkeypatch):
+    client, mod = build_client(tmp_path, monkeypatch)
+    srt_text = "1\n00:00:00,000 --> 00:00:01,000\nHello\n\n"
+
+    async def fake_fetch(url):
+        return srt_text
+
+    monkeypatch.setattr(mod, "fetch_srt_text", fake_fetch)
+
+    media_url = "http://host/media/Proj/ingest/originals/demo.mp4"
+    resp = client.get("/api/captions/cues", params={"media_url": media_url})
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["media_url"] == media_url
+    assert payload["srt_url"].endswith("/media/Proj/captions/demo.srt")
+    assert payload["cues"] == [{"startMs": 0, "endMs": 1000, "text": "Hello"}]
+
+    active = client.get("/api/captions/active", params={"media_url": media_url, "t_ms": 500})
+    assert active.status_code == 200
+    assert active.json()["text"] == "Hello"
+
+    srt_resp = client.get("/api/captions/srt", params={"media_url": media_url})
+    assert srt_resp.status_code == 200
+    assert "Hello" in srt_resp.text

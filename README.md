@@ -33,6 +33,9 @@ Key endpoints on port `8791`:
 - `POST /api/projects/{project}/media/generate-captions` — extract audio with ffmpeg, transcribe via faster-whisper (word timestamps on), and emit `.lines.txt`, `.srt`, `.words.json`
 - `GET /api/projects/{project}/media/captions?video_rel_path=...` — resolve the latest caption trio for a source video
 - `GET /api/projects/{project}/file?path=...` — safe file serving for allowlisted folders (`captions/`, `ingest/`, `exports/`, `resolve/`, `teleprompter/`, `_manifest/`)
+- `GET /api/captions/srt?media_url=...` — derive and proxy raw SRT text for a media URL
+- `GET /api/captions/cues?media_url=...` — derive and parse SRT into cues for LAN caption overlays
+- `GET /api/captions/active?media_url=...&t_ms=...` — return the active cue for a given timestamp
 
 Optional: set `MEDIA_SYNC_BASE_URL` to post the generated `.srt` to media-sync’s Resolve import endpoint; failures are logged without breaking caption generation.
 
@@ -44,6 +47,10 @@ Optional: set `MEDIA_SYNC_BASE_URL` to post the generated `.srt` to media-sync�
 ## ⚙️ Configuration
 
 Edit the `cfg` object in `public/index.html` (or use the built-in configuration drawer) to tune fonts, spacing, reveal style, alignment, emphasis profiles, and typography presets sourced from `docs/TYPOGRAPHY.md`. New UI selections persist to `captioner_state_v1` in localStorage and the seeded `public/localStorage.json` files.
+
+Caption derivation settings:
+- `SRT_MAP_MODE` — mapping rule for `media_url` (`captions_dir` default, or `side_by_side`)
+- `SRT_FETCH_TIMEOUT` — HTTP timeout (seconds) for fetching SRT text (default `5.0`)
 
 ---
 

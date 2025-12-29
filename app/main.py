@@ -10,9 +10,11 @@ import json
 import logging
 import mimetypes
 import os
+import re
 import subprocess
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
+from urllib.parse import urlparse, urlunparse
 
 import httpx
 from fastapi import Body, FastAPI, HTTPException, Query
@@ -33,6 +35,8 @@ CAPTIONER_PORT = int(os.environ.get("CAPTIONER_PORT", "8791"))
 CAPTIONER_MAX_UPLOAD_MB = int(os.environ.get("CAPTIONER_MAX_UPLOAD_MB", "4096"))
 MEDIA_SYNC_BASE_URL = os.environ.get("MEDIA_SYNC_BASE_URL", "").strip()
 CORS_ORIGINS = [o.strip() for o in os.environ.get("CAPTIONER_CORS_ORIGINS", "*").split(",") if o.strip()]
+SRT_MAP_MODE = os.environ.get("SRT_MAP_MODE", "captions_dir").strip() or "captions_dir"
+SRT_FETCH_TIMEOUT = float(os.environ.get("SRT_FETCH_TIMEOUT", "5.0"))
 
 ALLOWED_SERVE_ROOTS = {"captions", "ingest", "exports", "resolve", "teleprompter", "_manifest"}
 SUPPORTED_VIDEO_SUFFIXES = {".mp4", ".mov", ".mkv", ".m4v", ".avi"}
@@ -249,6 +253,94 @@ def resolve_caption_paths(video_rel_path: str, sha: str) -> CaptionPaths:
     )
 
 
+def derive_srt_url(media_url: str, mode: str) -> str:
+    """Derive the SRT URL from a media URL.
+
+    Example:
+        # curl "http://localhost:8791/api/captions/srt?media_url=http://host/media/.../clip.mp4"
+    """
+
+    parsed = urlparse(media_url)
+    clean = parsed._replace(query="", fragment="")
+    path = clean.path
+
+    suffix = Path(path).suffix.lower()
+    if suffix not in SUPPORTED_VIDEO_SUFFIXES:
+        raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail=f"Unsupported media extension: {suffix}")
+
+    if mode == "side_by_side":
+        srt_path = re.sub(rf"{re.escape(suffix)}$", ".srt", path, flags=re.IGNORECASE)
+    elif mode == "captions_dir":
+        srt_path = re.sub(r"/ingest/originals/", "/captions/", path, flags=re.IGNORECASE)
+        srt_path = re.sub(rf"{re.escape(suffix)}$", ".srt", srt_path, flags=re.IGNORECASE)
+    else:
+        raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail=f"Unknown SRT map mode: {mode}")
+
+    return urlunparse(clean._replace(path=srt_path))
+
+
+def parse_srt(srt_text: str) -> List[Dict[str, object]]:
+    """Parse SRT text into cue dictionaries.
+
+    Example:
+        # parse_srt("1\\n00:00:00,000 --> 00:00:01,000\\nHello\\n")
+    """
+
+    if not srt_text:
+        return []
+
+    text = srt_text.lstrip("\ufeff").replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not text:
+        return []
+
+    blocks = [block.strip("\n") for block in re.split(r"\n{2,}", text) if block.strip()]
+    cues: List[Dict[str, object]] = []
+    ts_pattern = re.compile(r"^(\d{2}:\d{2}:\d{2},\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2},\d{3})")
+
+    def to_ms(timestamp: str) -> int:
+        hh, mm, ss_ms = timestamp.split(":", 2)
+        ss, ms = ss_ms.split(",", 1)
+        return (((int(hh) * 60 + int(mm)) * 60) + int(ss)) * 1000 + int(ms)
+
+    for block in blocks:
+        lines = block.split("\n")
+        if not lines:
+            continue
+
+        idx_line = lines[0].strip()
+        has_index = idx_line.isdigit()
+        timing_line = lines[1].strip() if has_index and len(lines) > 1 else lines[0].strip()
+        match = ts_pattern.match(timing_line)
+        if not match:
+            continue
+
+        start_ms = to_ms(match.group(1))
+        end_ms = to_ms(match.group(2))
+        text_start = 2 if has_index else 1
+        caption_lines = [line.rstrip() for line in lines[text_start:] if line.strip()]
+        caption_text = "\n".join(caption_lines)
+        cues.append({"startMs": start_ms, "endMs": end_ms, "text": caption_text})
+
+    cues.sort(key=lambda cue: int(cue["startMs"]))
+    return cues
+
+
+async def fetch_srt_text(url: str) -> str:
+    """Fetch SRT text from a URL with basic error handling.
+
+    Example:
+        # await fetch_srt_text("http://localhost:8787/media/foo.srt")
+    """
+
+    async with httpx.AsyncClient(timeout=SRT_FETCH_TIMEOUT) as client:
+        resp = await client.get(url)
+        if resp.status_code == HTTP_404_NOT_FOUND:
+            return ""
+        if not resp.is_success:
+            raise HTTPException(status_code=502, detail=f"Failed fetching SRT: {resp.status_code}")
+        return resp.text
+
+
 def list_projects(projects_root: Path = DEFAULT_PROJECTS_ROOT) -> List[str]:
     if not projects_root.exists():
         return []
@@ -349,6 +441,54 @@ def create_app() -> FastAPI:
         if not found:
             raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Captions not found")
         return found
+
+    @app.get("/api/captions/srt")
+    async def get_srt_for_media(media_url: str = Query(..., description="Media URL to resolve into an SRT URL")) -> Response:
+        """Serve raw SRT text derived from a media URL.
+
+        Example:
+            curl "http://localhost:8791/api/captions/srt?media_url=http://host/media/foo.mp4"
+        """
+
+        srt_url = derive_srt_url(media_url, SRT_MAP_MODE)
+        srt_text = await fetch_srt_text(srt_url)
+        return Response(
+            content=srt_text,
+            media_type="application/x-subrip",
+            headers={"X-SRT-URL": srt_url, "Cache-Control": "no-store"},
+        )
+
+    @app.get("/api/captions/cues")
+    async def get_cues_for_media(media_url: str = Query(..., description="Media URL to resolve into parsed cues")) -> JSONResponse:
+        """Return parsed cues for a media URL.
+
+        Example:
+            curl "http://localhost:8791/api/captions/cues?media_url=http://host/media/foo.mp4"
+        """
+
+        srt_url = derive_srt_url(media_url, SRT_MAP_MODE)
+        srt_text = await fetch_srt_text(srt_url)
+        cues = parse_srt(srt_text)
+        return JSONResponse({"media_url": media_url, "srt_url": srt_url, "cues": cues})
+
+    @app.get("/api/captions/active")
+    async def get_active_caption(
+        media_url: str = Query(..., description="Media URL to resolve into parsed cues"),
+        t_ms: int = Query(..., ge=0, description="Playback timestamp in milliseconds"),
+    ) -> JSONResponse:
+        """Return the active cue at a specific timestamp.
+
+        Example:
+            curl "http://localhost:8791/api/captions/active?media_url=http://host/media/foo.mp4&t_ms=1500"
+        """
+
+        srt_url = derive_srt_url(media_url, SRT_MAP_MODE)
+        srt_text = await fetch_srt_text(srt_url)
+        cues = parse_srt(srt_text)
+        for cue in cues:
+            if int(cue["startMs"]) <= t_ms <= int(cue["endMs"]):
+                return JSONResponse({**cue, "srt_url": srt_url})
+        return JSONResponse({"text": "", "startMs": None, "endMs": None, "srt_url": srt_url})
 
     @app.post("/api/projects/{project}/media/generate-captions")
     async def generate_captions(project: str, payload: CaptionRequest = Body(...)) -> CaptionPaths:

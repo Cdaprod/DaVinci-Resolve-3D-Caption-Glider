@@ -2,6 +2,7 @@ import importlib
 import json
 from pathlib import Path
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -120,6 +121,10 @@ def test_derive_srt_url_captions_dir(tmp_path, monkeypatch):
     expected = "http://192.168.0.25:8787/media/Proj/captions/demo.srt"
     assert mod.derive_srt_url(url, "captions_dir") == expected
 
+    url_ingest = "http://192.168.0.25:8787/media/Proj/ingest/demo.mp4"
+    expected_ingest = "http://192.168.0.25:8787/media/Proj/captions/demo.srt"
+    assert mod.derive_srt_url(url_ingest, "captions_dir") == expected_ingest
+
 
 def test_parse_srt_outputs_cues(tmp_path, monkeypatch):
     client, mod = build_client(tmp_path, monkeypatch)
@@ -155,3 +160,23 @@ def test_captions_endpoints_return_expected_payloads(tmp_path, monkeypatch):
     srt_resp = client.get("/api/captions/srt", params={"media_url": media_url})
     assert srt_resp.status_code == 200
     assert "Hello" in srt_resp.text
+
+
+def test_fetch_srt_text_wraps_network_errors(tmp_path, monkeypatch):
+    client, mod = build_client(tmp_path, monkeypatch)
+
+    class StubClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def get(self, url):
+            raise httpx.RequestError("boom", request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(mod.httpx, "AsyncClient", lambda timeout: StubClient())
+
+    resp = client.get("/api/captions/srt", params={"media_url": "http://host/media/Proj/ingest/demo.mp4"})
+    assert resp.status_code == 502
+    assert "Failed fetching SRT" in resp.text

@@ -404,6 +404,21 @@ def create_app() -> FastAPI:
 
     app.mount("/public", StaticFiles(directory=PUBLIC_DIR, html=True), name="public")
 
+    @app.get("/")
+    async def root() -> FileResponse:
+        """Serve the primary captioner UI.
+
+        Example:
+            curl "http://localhost:8791/"
+        """
+
+        preferred = PUBLIC_DIR / "caption-glider" / "index.html"
+        fallback = PUBLIC_DIR / "index.html"
+        target = preferred if preferred.exists() else fallback
+        if not target.exists():
+            raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="UI not found")
+        return FileResponse(target)
+
     @app.get("/health")
     async def health() -> Dict[str, str]:
         return {"status": "ok"}

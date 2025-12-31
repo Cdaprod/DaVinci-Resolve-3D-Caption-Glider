@@ -111,6 +111,7 @@ def test_root_serves_ui(tmp_path, monkeypatch):
     resp = client.get("/")
     assert resp.status_code == 200
     assert "<html" in resp.text.lower()
+    assert "captioner" in resp.text.lower()
 
 
 def test_derive_srt_url_captions_dir(tmp_path, monkeypatch):

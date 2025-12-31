@@ -106,6 +106,13 @@ def test_generate_captions_blocks_traversal(tmp_path, monkeypatch):
     assert resp.status_code == 400
 
 
+def test_root_serves_ui(tmp_path, monkeypatch):
+    client, mod = build_client(tmp_path, monkeypatch)
+    resp = client.get("/")
+    assert resp.status_code == 200
+    assert "<html" in resp.text.lower()
+
+
 def test_derive_srt_url_captions_dir(tmp_path, monkeypatch):
     client, mod = build_client(tmp_path, monkeypatch)
     url = "http://192.168.0.25:8787/media/Proj/ingest/originals/demo.mp4?source=primary"

@@ -272,6 +272,7 @@ def derive_srt_url(media_url: str, mode: str) -> str:
         srt_path = re.sub(rf"{re.escape(suffix)}$", ".srt", path, flags=re.IGNORECASE)
     elif mode == "captions_dir":
         srt_path = re.sub(r"/ingest/originals/", "/captions/", path, flags=re.IGNORECASE)
+        srt_path = re.sub(r"/ingest/", "/captions/", srt_path, flags=re.IGNORECASE)
         srt_path = re.sub(rf"{re.escape(suffix)}$", ".srt", srt_path, flags=re.IGNORECASE)
     else:
         raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail=f"Unknown SRT map mode: {mode}")
@@ -332,13 +333,17 @@ async def fetch_srt_text(url: str) -> str:
         # await fetch_srt_text("http://localhost:8787/media/foo.srt")
     """
 
-    async with httpx.AsyncClient(timeout=SRT_FETCH_TIMEOUT) as client:
-        resp = await client.get(url)
-        if resp.status_code == HTTP_404_NOT_FOUND:
-            return ""
-        if not resp.is_success:
-            raise HTTPException(status_code=502, detail=f"Failed fetching SRT: {resp.status_code}")
-        return resp.text
+    try:
+        async with httpx.AsyncClient(timeout=SRT_FETCH_TIMEOUT) as client:
+            resp = await client.get(url)
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail=f"Failed fetching SRT: {exc}") from exc
+
+    if resp.status_code == HTTP_404_NOT_FOUND:
+        return ""
+    if not resp.is_success:
+        raise HTTPException(status_code=502, detail=f"Failed fetching SRT: {resp.status_code}")
+    return resp.text
 
 
 def list_projects(projects_root: Path = DEFAULT_PROJECTS_ROOT) -> List[str]:

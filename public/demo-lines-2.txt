@@ -1,0 +1,10 @@
+Cinematic scripting starts in the default glide profile—no marker needed.
+Paragraph breaks are authored with [BREAK] before the next caption.
+#A Calm dolly profile slows the follow and lets the words breathe.
+Soft emphasis **leans** in while [PAUSE=220] sets up the next beat.
+#B Assertive profile tightens follow and lands punctuation with punch.
+[HOLD=320] It keeps stacking previous lines while leaning into the terminal overhang.
+[BR=2]
+#C Dramatic settle widens the lens and lingers on the last word.
+Profile C loves **last** words—slow overhangs and longer holds.
+#default Return to the default glide once the scripted moods have played.

@@ -398,6 +398,49 @@
     return { cleanText, isEmphasized };
   }
 
+  function patchNoiseShaderSources(vertexShader = '', fragmentShader = '') {
+    const vNoiseDecl = 'varying vec2 vNoiseUv;';
+    let vtx = String(vertexShader || '');
+    let frag = String(fragmentShader || '');
+
+    if (!vtx.includes('vNoiseUv')) {
+      if (vtx.includes('varying vec2 vUv;')) {
+        vtx = vtx.replace('varying vec2 vUv;', `varying vec2 vUv;\n${vNoiseDecl}`);
+      } else {
+        vtx = `${vNoiseDecl}\n${vtx}`;
+      }
+
+      if (vtx.includes('#include <begin_vertex>')) {
+        vtx = vtx.replace('#include <begin_vertex>', `#include <begin_vertex>\n  vNoiseUv = position.xy;`);
+      } else {
+        vtx = vtx.replace('void main() {', 'void main() {\n  vNoiseUv = position.xy;');
+      }
+    }
+
+    if (!frag.includes('vNoiseUv')) {
+      if (frag.includes('varying vec2 vUv;')) {
+        frag = frag.replace('varying vec2 vUv;', `varying vec2 vUv;\n${vNoiseDecl}`);
+      } else {
+        frag = `${vNoiseDecl}\n${frag}`;
+      }
+    }
+
+    const noiseSnippet = `
+        #include <map_fragment>
+        vec2 noiseUv = vNoiseUv * uNoiseScale;
+        float noise = texture2D(uNoiseMap, noiseUv).r;
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * (0.92 + noise * 0.16), uNoiseStrength);
+        `;
+
+    if (frag.includes('#include <map_fragment>')) {
+      frag = frag.replace('#include <map_fragment>', noiseSnippet);
+    } else if (!frag.includes('uNoiseMap')) {
+      frag = `${frag}\n${noiseSnippet}`;
+    }
+
+    return { vertexShader: vtx, fragmentShader: frag };
+  }
+
   return {
     clamp01,
     easeOutCubic,
@@ -420,6 +463,7 @@
     normalizeProfileToken,
     normalizeTextAlign,
     lineAlignmentOffset,
+    patchNoiseShaderSources,
     TYPOGRAPHY_PROFILES,
     DEFAULT_TYPOGRAPHY_PROFILE_ID,
     applyTypographyProfile,

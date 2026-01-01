@@ -798,15 +798,12 @@
       shader.uniforms.uNoiseStrength = { value: 0.08 };
       shader.uniforms.uNoiseScale = { value: 1.0 };
 
-      shader.fragmentShader = shader.fragmentShader.replace(
-        '#include <map_fragment>',
-        `
-        #include <map_fragment>
-        vec2 noiseUv = vUv * uNoiseScale;
-        float noise = texture2D(uNoiseMap, noiseUv).r;
-        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * (0.92 + noise * 0.16), uNoiseStrength);
-        `
+      const patched = AnimationHelpers.patchNoiseShaderSources(
+        shader.vertexShader,
+        shader.fragmentShader
       );
+      shader.vertexShader = patched.vertexShader;
+      shader.fragmentShader = patched.fragmentShader;
 
       material.userData.shader = shader;
     };

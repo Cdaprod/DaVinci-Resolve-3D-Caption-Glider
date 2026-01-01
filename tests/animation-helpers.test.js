@@ -15,19 +15,20 @@ const {
   normalizeProfileToken,
   visibleHalfWidth,
   requiredDistanceForSpan,
-    sanitizePersistedState,
-    normalizePersistedPayload,
-    buildTextGeometrySpec,
-    TYPOGRAPHY_PROFILES,
-    DEFAULT_TYPOGRAPHY_PROFILE_ID,
-    applyTypographyProfile,
-    isValidFontResource,
-    normalizeFontResource,
-    normalizeTextAlign,
-    lineAlignmentOffset,
-    parseSrtCues,
-    buildCueWordTimings,
-  } = require('../public/animation-helpers');
+  sanitizePersistedState,
+  normalizePersistedPayload,
+  buildTextGeometrySpec,
+  TYPOGRAPHY_PROFILES,
+  DEFAULT_TYPOGRAPHY_PROFILE_ID,
+  applyTypographyProfile,
+  isValidFontResource,
+  normalizeFontResource,
+  normalizeTextAlign,
+  lineAlignmentOffset,
+  parseSrtCues,
+  buildCueWordTimings,
+  patchNoiseShaderSources,
+} = require('../public/animation-helpers');
 
 function testClamp01() {
   assert.strictEqual(clamp01(-1), 0);
@@ -231,6 +232,28 @@ function testBreakTokensAccumulate() {
   assert.strictEqual(segments[2].breaks, 2);
 }
 
+function testPatchNoiseShaderSources() {
+  const vertexShader = `
+    varying vec2 vUv;
+    void main() {
+      #include <begin_vertex>
+    }
+  `;
+
+  const fragmentShader = `
+    varying vec2 vUv;
+    void main() {
+      #include <map_fragment>
+    }
+  `;
+
+  const patched = patchNoiseShaderSources(vertexShader, fragmentShader);
+  assert.ok(patched.vertexShader.includes('vNoiseUv'));
+  assert.ok(patched.vertexShader.includes('vNoiseUv = position.xy'));
+  assert.ok(patched.fragmentShader.includes('uNoiseMap'));
+  assert.ok(patched.fragmentShader.includes('vNoiseUv * uNoiseScale'));
+}
+
 function testVisibleHalfWidth() {
   const half = visibleHalfWidth(3.5, 1, 50);
   assert(half > 1 && half < 3, 'visible half width should scale with distance and fov');
@@ -386,6 +409,7 @@ function run() {
   testParseScriptLines();
   testParseScriptLinesDefaultFirst();
   testBreakTokensAccumulate();
+  testPatchNoiseShaderSources();
   testStripControlTokens();
   testNormalizeProfileToken();
   testNormalizeTextAlignHelper();

@@ -1,10 +1,205 @@
-Cinematic scripting starts in the default glide profile—no marker needed.
-Paragraph breaks are authored with [BREAK] before the next caption.
-#A Calm dolly profile slows the follow and lets the words breathe.
-Soft emphasis **leans** in while [PAUSE=220] sets up the next beat.
-#B Assertive profile tightens follow and lands punctuation with punch.
-[HOLD=320] It keeps stacking previous lines while leaning into the terminal overhang.
+#default So what you’re looking at right now,
+is actually the overhead camera.
+[PAUSE=180]
+
+This little camera right here — this is an OBSBOT Tiny 2.
+It’s mounted above my desk, looking straight down at the workspace.
+[PAUSE=200]
+
+#A And yeah, I know — it’s kind of funny that you’re watching a camera...
+...from another camera.
+[PAUSE=220]
+
+#default But for what I’m doing, this thing is honestly.**perfect**
+[PAUSE=180]
+
+All I really need here is access to a sensor,
+A reliable sensor,
+Something that can see the workspace, track movement, and just work.
+[BR=1]
+
+#A I don’t need cinema glass for this angle,
+I don’t need shallow depth of field,
+I need **coverage**.
+[PAUSE=220]
+
+#default And for that, this is actually a really solid piece of hardware.
+[PAUSE=160]
+
+It gives me a clean overhead view,
+it stays out of the way,
+and it lets me focus on the actual work,
+instead of babysitting the camera.
+[BR=1]
+
+#B So when you see this angle later on in the video,
+this is what it is — it’s the **procedural view**.
+[PAUSE=200]
+
+It’s here to show you exactly what I’m doing,
+step by step.
+[HOLD=280]
+
+[BREAK]
+
+#default Now… when it comes to projects,
+anyone in their right mind could look at my schedule and say.
+[PAUSE=200]
+
+#B "What the hell is this guy doing?"
+[HOLD=320]
+
+#default And honestly — that reaction makes sense,
+if you don’t see the system behind it.
+[PAUSE=240]
+
+[BREAK]
+
+#default But there **is** a systematic approach to what I’m doing.
+[PAUSE=180]
+
+The long-term goal is simple:
+I want to make a **cinematic documentary**.
+[PAUSE=220]
+
+#A But you don’t just jump straight into that,
+Everything you’re seeing right now —
+every side project, every upgrade —
+it’s all building toward being able to do that properly.
+[PAUSE=260]
+
+[BREAK]
+
+#default So how does all of this lead into a documentary?
+[PAUSE=200]
+
+#B I’ll just say it plainly:
+we’re going to make the documentary,
+using our **own software**.
+[PAUSE=260]
+
+Software we’re building from scratch.
+[HOLD=300]
+
+[BREAK]
+
+#default What we’re actually building is a platform as a service —
+one that represents the ideal filmmaker,
+and editor workflow,
+end-to-end.
+[PAUSE=240]
+
+Capture
+Monitoring
+Storage
+Organization
+Editing
+Automation
+All in one system
 [BR=2]
-#C Dramatic settle widens the lens and lingers on the last word.
-Profile C loves **last** words—slow overhangs and longer holds.
-#default Return to the default glide once the scripted moods have played.
+
+[BREAK]
+
+#default And to bring this full circle to what we’re doing today,
+we’re upgrading the hardware,
+that powers our backend camera agents.
+[PAUSE=240]
+
+#A Right now, we’re using Raspberry Pis,
+with USB capture card dongles,
+And they work.
+[PAUSE=180]
+
+#B But working isn’t the same as **designed**.
+[HOLD=320]
+
+[BREAK]
+
+#default These two boxes right here are upgrades.
+[PAUSE=160]
+
+One is an M2 expansion board,
+The other is a dedicated capture card HAT.
+[PAUSE=200]
+
+[BREAK]
+
+#default We’re moving our existing single-slot M2 board,
+from the top of the Raspberry Pi,
+to the bottom — out of the way —
+and that immediately gives us an additional M2 slot.
+[PAUSE=260]
+
+#A More importantly,
+it lets us move away from a cheap HDMI-to-USB capture dongle,
+and into a CSI ribbon-based camera capture system.
+[PAUSE=260]
+
+That gives us HDMI-in,
+HDMI-out,
+and full HDMI passthrough --
+all handled at the board level.
+[BR=2]
+
+[BREAK]
+
+#default Now here’s the important part:
+the NVMe storage isn’t being used to store media.
+[PAUSE=220]
+
+#B It’s being used as a **cache buffer**.
+[HOLD=300]
+
+[BREAK]
+
+#default This Raspberry Pi runs a capture daemon —
+a supervised backend service —
+that uses NVMe as high-speed buffering,
+so we can rescue dropped frames,
+before and after sending video over the network,
+to our central API gateway,
+and media services.
+[PAUSE=320]
+
+[BREAK]
+
+#A Because let’s be honest:
+the whole point of this system,
+is to eliminate memory cards entirely.
+[PAUSE=260]
+
+No more copying files,
+No more manual archiving,
+No more juggling cards,
+between cameras and computers.
+[BR=2]
+
+[BREAK]
+
+#default Everything lives inside our platform’s browser UI.
+[PAUSE=200]
+
+Camera monitoring
+Camera controls
+Digital asset management
+Built-in timelines
+Effects
+SRT captions
+And AI-assisted tooling layered on top
+[BR=2]
+
+[BREAK]
+
+#default People hear all of that and say,
+[PAUSE=120]
+
+#B "That sounds like a lot"
+[HOLD=300]
+
+#default But when everything lives in one place,
+it just comes down to **implementation**.
+[PAUSE=240]
+
+#C This is the same idea —
+just built for how I actually **work**.
+[HOLD=420]

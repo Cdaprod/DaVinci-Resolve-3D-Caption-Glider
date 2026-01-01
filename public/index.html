@@ -763,11 +763,64 @@
     palette: { text: cfg.color, background: cfg.backgroundColor },
   });
 
+  function createTextNoiseTexture(size = 64) {
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+    const image = ctx.createImageData(size, size);
+    for (let i = 0; i < image.data.length; i += 4) {
+      const n = Math.floor(200 + Math.random() * 55);
+      image.data[i] = n;
+      image.data[i + 1] = n;
+      image.data[i + 2] = n;
+      image.data[i + 3] = 255;
+    }
+    ctx.putImageData(image, 0, 0);
+
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(6, 6);
+    tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    return tex;
+  }
+
+  const textNoiseTexture = createTextNoiseTexture();
+
+  function applyTextShaderEffect(material) {
+    if (!material || material.userData?.shaderEnhanced) return;
+    material.userData.shaderEnhanced = true;
+
+    material.onBeforeCompile = (shader) => {
+      shader.uniforms.uNoiseMap = { value: textNoiseTexture };
+      shader.uniforms.uNoiseStrength = { value: 0.08 };
+      shader.uniforms.uNoiseScale = { value: 1.0 };
+
+      shader.fragmentShader = shader.fragmentShader.replace(
+        '#include <map_fragment>',
+        `
+        #include <map_fragment>
+        vec2 noiseUv = vUv * uNoiseScale;
+        float noise = texture2D(uNoiseMap, noiseUv).r;
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * (0.92 + noise * 0.16), uNoiseStrength);
+        `
+      );
+
+      material.userData.shader = shader;
+    };
+
+    material.needsUpdate = true;
+  }
+
   function createBaseMaterial(isEmphasis = false) {
     if (lightingRig?.buildMaterialParams) {
-      return new THREE.MeshStandardMaterial(lightingRig.buildMaterialParams(cfg.color, { emphasis: isEmphasis }));
+      const mat = new THREE.MeshStandardMaterial(lightingRig.buildMaterialParams(cfg.color, { emphasis: isEmphasis }));
+      applyTextShaderEffect(mat);
+      return mat;
     }
-    return new THREE.MeshStandardMaterial({
+    const mat = new THREE.MeshStandardMaterial({
       color: cfg.color,
       emissive: cfg.color,
       emissiveIntensity: isEmphasis ? 0.35 : 0.18,
@@ -776,6 +829,8 @@
       transparent: true,
       opacity: 1,
     });
+    applyTextShaderEffect(mat);
+    return mat;
   }
 
   let baseMat = createBaseMaterial();
@@ -794,6 +849,7 @@
   function applyMaterialTone(mat, isEmphasis = false) {
     if (lightingRig?.tintMaterial) {
       lightingRig.tintMaterial(mat, cfg.color, { emphasis: isEmphasis });
+      applyTextShaderEffect(mat);
       return;
     }
     if (!mat) return;
@@ -806,6 +862,7 @@
     mat.opacity = params.opacity ?? 1;
     mat.transparent = params.transparent ?? true;
     mat.needsUpdate = true;
+    applyTextShaderEffect(mat);
   }
 
   let lineObjs = [];
@@ -1921,13 +1978,17 @@
         ttfLoader.load(url, (json) => {
           try {
             const f = new THREE.Font(json);
-            resolve(f);
+            const normalized = AnimationHelpers.normalizeFontResource?.(f) || f;
+            resolve(normalized);
           } catch (e) {
             reject(e);
           }
         }, undefined, onError);
       } else {
-        fontLoader.load(url, (font) => resolve(font), undefined, onError);
+        fontLoader.load(url, (font) => {
+          const normalized = AnimationHelpers.normalizeFontResource?.(font) || font;
+          resolve(normalized);
+        }, undefined, onError);
       }
     });
   }

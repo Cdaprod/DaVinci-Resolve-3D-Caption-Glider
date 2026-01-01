@@ -22,6 +22,7 @@ const {
     DEFAULT_TYPOGRAPHY_PROFILE_ID,
     applyTypographyProfile,
     isValidFontResource,
+    normalizeFontResource,
     normalizeTextAlign,
     lineAlignmentOffset,
     parseSrtCues,
@@ -42,6 +43,13 @@ function testIsValidFontResource() {
   assert.strictEqual(isValidFontResource({}), false);
   assert.strictEqual(isValidFontResource({ data: { glyphs: {} } }), false);
   assert.strictEqual(isValidFontResource({ data: { glyphs: {}, resolution: 'bad' } }), false);
+}
+
+function testNormalizeFontResource() {
+  const font = { data: { glyphs: { A: {} } } };
+  const normalized = normalizeFontResource(font, 900);
+  assert.strictEqual(normalized.data.resolution, 900);
+  assert.strictEqual(isValidFontResource(normalized), true);
 }
 
 function testComputeCenterBounds() {
@@ -360,6 +368,7 @@ function testSeedThemesMatchPalettes() {
 function run() {
   testClamp01();
   testIsValidFontResource();
+  testNormalizeFontResource();
   testComputeCenterBounds();
   testEndBias();
   testExtractEmphasisToken();

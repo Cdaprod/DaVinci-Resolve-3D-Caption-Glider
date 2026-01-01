@@ -75,6 +75,21 @@
     return hasGlyphs && hasResolution;
   }
 
+  function normalizeFontResource(font, fallbackResolution = 1000) {
+    if (!font || typeof font !== 'object') return font;
+    if (!font.data || typeof font.data !== 'object') return font;
+
+    if (!font.data.glyphs && font.glyphs && typeof font.glyphs === 'object') {
+      font.data.glyphs = font.glyphs;
+    }
+
+    if (!font.data.resolution || !isFinite(font.data.resolution)) {
+      font.data.resolution = fallbackResolution;
+    }
+
+    return font;
+  }
+
   function computeCenterBounds(centers) {
     let minX = Infinity;
     let maxX = -Infinity;
@@ -376,6 +391,7 @@
     easeOutBack,
     damp,
     isValidFontResource,
+    normalizeFontResource,
     computeCenterBounds,
     endBias,
     visibleHalfWidth,

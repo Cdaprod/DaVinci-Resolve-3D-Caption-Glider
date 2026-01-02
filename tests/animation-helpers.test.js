@@ -403,7 +403,6 @@ function testRecordingUiHooked() {
   const indexPath = path.join(__dirname, '..', 'public', 'index.html');
   const html = fs.readFileSync(indexPath, 'utf8');
   assert.ok(html.includes('btnRecord'), 'Record button id should exist');
-  assert.ok(html.includes('btnRecordFull'), 'Record timeline button id should exist');
   assert.ok(html.includes('btnStop'), 'Stop button id should exist');
   assert.ok(html.includes('canvas.captureStream(60)'), 'captureStream should target 60fps');
   assert.ok(html.includes('MediaRecorder'), 'MediaRecorder should be referenced');

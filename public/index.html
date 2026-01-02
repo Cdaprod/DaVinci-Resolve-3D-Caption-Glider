@@ -410,7 +410,6 @@
       <button id="btnRenderVertical">Render Vertical (server)</button>
       <div class="row wrap">
         <button id="btnRecord">Record Canvas (WebM)</button>
-        <button id="btnRecordFull">Record Timeline (auto)</button>
         <button id="btnStop">Stop Recording</button>
       </div>
       <div class="progress"><span id="renderProgress"></span></div>
@@ -933,7 +932,6 @@
   const btnReplay = document.getElementById('btnReplay');
   const btnCreate = document.getElementById('btnCreate');
   const btnRecord = document.getElementById('btnRecord');
-  const btnRecordFull = document.getElementById('btnRecordFull');
   const btnStop = document.getElementById('btnStop');
 
   const cfgDetails = document.getElementById('cfgDetails');
@@ -946,7 +944,6 @@
 
   btnStop.style.display = 'none';
   btnRecord.disabled = false;
-  btnRecordFull.disabled = false;
   btnStop.disabled = true;
 
   // Collapsible main UI panel
@@ -2979,6 +2976,7 @@ ${String(err)}`);
   let mediaRecorder = null;
   let recordedChunks = [];
   let recordingActive = false;
+  let recordingUiState = null;
 
   function pickMimeType() {
     const candidates = ['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'];
@@ -2990,7 +2988,6 @@ ${String(err)}`);
 
   if (!canvas.captureStream || !window.MediaRecorder) {
     btnRecord.disabled = true;
-    btnRecordFull.disabled = true;
     btnRecord.title = 'Recording not supported in this browser.';
   }
 
@@ -3005,12 +3002,11 @@ ${String(err)}`);
     setTimeout(() => URL.revokeObjectURL(url), 5000);
   }
 
-  function startRecording({ resetTimeline = false, autoStopAtEnd = false } = {}) {
+  function startRecording({ resetTimeline = false, autoPlay = false, autoStopAtEnd = false, preRollMs = 180 } = {}) {
     if (recordingActive) return;
     if (!canvas.captureStream || !window.MediaRecorder) {
       setStatus('Recording not supported in this browser.\nTry Chrome/Edge on desktop.\n(iOS Safari often blocks WebM MediaRecorder)');
       btnRecord.disabled = true;
-      btnRecordFull.disabled = true;
       return;
     }
 
@@ -3031,8 +3027,11 @@ ${String(err)}`);
     recordedChunks = [];
     recordingActive = true;
     btnRecord.disabled = true;
-    btnRecordFull.disabled = true;
     btnStop.disabled = false;
+    recordingUiState = {
+      collapsed: ui.classList.contains('collapsed'),
+    };
+    setUiCollapsed(true);
 
     mediaRecorder.ondataavailable = (ev) => {
       if (ev.data && ev.data.size > 0) recordedChunks.push(ev.data);
@@ -3043,8 +3042,11 @@ ${String(err)}`);
       btnRecord.style.display = '';
       btnStop.style.display = 'none';
       btnRecord.disabled = false;
-      btnRecordFull.disabled = false;
       btnStop.disabled = true;
+      if (recordingUiState) {
+        setUiCollapsed(recordingUiState.collapsed);
+        recordingUiState = null;
+      }
 
       const blob = new Blob(recordedChunks, { type: (mediaRecorder && mediaRecorder.mimeType) || 'video/webm' });
       recordedChunks = [];
@@ -3059,8 +3061,16 @@ ${String(err)}`);
     btnStop.style.display = '';
     setStatus(`Recording…\nMime: ${mediaRecorder.mimeType || '(default)'}`);
 
-    if (autoStopAtEnd && timelineLines.length && !timelineState.isPlaying) {
-      playTimelinePlayback({ onStop: () => stopRecording() });
+    if (timelineLines.length) {
+      renderTimelineFrame(performance.now());
+    }
+
+    if (autoPlay && timelineLines.length && !timelineState.isPlaying) {
+      const triggerPlay = () => {
+        playTimelinePlayback({ onStop: autoStopAtEnd ? () => stopRecording() : undefined });
+      };
+      if (preRollMs > 0) setTimeout(triggerPlay, preRollMs);
+      else triggerPlay();
     }
   }
 
@@ -3069,13 +3079,12 @@ ${String(err)}`);
     try { mediaRecorder.stop(); } catch (e) { setStatus('Stop failed:\n' + String(e)); }
   }
 
-  btnRecord.addEventListener('click', () => startRecording());
-  btnRecordFull.addEventListener('click', () => {
+  btnRecord.addEventListener('click', () => {
     if (!timelineLines.length) {
       setStatus('No timeline captions loaded.');
       return;
     }
-    startRecording({ resetTimeline: true, autoStopAtEnd: true });
+    startRecording({ resetTimeline: true, autoPlay: true, autoStopAtEnd: true });
   });
   btnStop.addEventListener('click', stopRecording);
 

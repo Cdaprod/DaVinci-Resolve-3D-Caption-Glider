@@ -408,8 +408,9 @@
     <div class="panel" id="exportPanel">
       <h4>Export</h4>
       <button id="btnRenderVertical">Render Vertical (server)</button>
-      <div class="row">
+      <div class="row wrap">
         <button id="btnRecord">Record Canvas (WebM)</button>
+        <button id="btnRecordFull">Record Timeline (auto)</button>
         <button id="btnStop">Stop Recording</button>
       </div>
       <div class="progress"><span id="renderProgress"></span></div>
@@ -879,6 +880,7 @@
   let timelineLineSource = [];
   let timelineRafId = null;
   let timelineLastTick = null;
+  let timelineStopCallback = null;
 
   let stackedLineCount = 0;
   const stackedGroups = [];
@@ -931,6 +933,7 @@
   const btnReplay = document.getElementById('btnReplay');
   const btnCreate = document.getElementById('btnCreate');
   const btnRecord = document.getElementById('btnRecord');
+  const btnRecordFull = document.getElementById('btnRecordFull');
   const btnStop = document.getElementById('btnStop');
 
   const cfgDetails = document.getElementById('cfgDetails');
@@ -943,6 +946,7 @@
 
   btnStop.style.display = 'none';
   btnRecord.disabled = false;
+  btnRecordFull.disabled = false;
   btnStop.disabled = true;
 
   // Collapsible main UI panel
@@ -1477,6 +1481,7 @@
       timelineState.durationMs = 0;
       setTimelineTime(0, { silent: true });
       setActiveCaptionPreview('');
+      updateTimelineDisplay();
     }
     persistState();
   }
@@ -1492,7 +1497,7 @@
   function setTimelineTime(ms, { silent = false } = {}) {
     timelineState.currentMs = Math.max(0, Math.min(timelineState.durationMs, Number(ms) || 0));
     updateTimelineDisplay();
-    if (!silent && (captionSourceState.mode === 'srt' || captionSourceState.mode === 'cues')) {
+    if (!silent && timelineLines.length) {
       renderTimelineFrame();
     }
   }
@@ -1512,9 +1517,14 @@
       timelineRafId = null;
     }
     timelineLastTick = null;
+    if (typeof timelineStopCallback === 'function') {
+      const cb = timelineStopCallback;
+      timelineStopCallback = null;
+      cb();
+    }
   }
 
-  function playTimelinePlayback() {
+  function playTimelinePlayback({ onStop } = {}) {
     if (!timelineLines.length) {
       setStatus('No timeline captions loaded.');
       return;
@@ -1522,6 +1532,7 @@
     if (timelineState.isPlaying) return;
     timelineState.isPlaying = true;
     timelineLastTick = performance.now();
+    if (onStop) timelineStopCallback = onStop;
 
     const tick = (now) => {
       if (!timelineState.isPlaying) return;
@@ -1543,6 +1554,29 @@
     clearAllLinesFromScene();
     timelineState.activeIndex = -1;
     render();
+  }
+
+  function prepareTimelineFromLineObjs(lines) {
+    let cursorMs = 0;
+    for (const line of lines) {
+      const hasTiming = typeof line.startTime === 'number' && typeof line.endTime === 'number';
+      if (!hasTiming) {
+        const pauseMs = Math.max(0, line.pauseMs || 0);
+        const holdMs = Math.max(0, line.holdMs || 0);
+        cursorMs += pauseMs;
+        const durationMs = Math.max(50, line.durationMs || 0);
+        line.startTime = cursorMs / 1000;
+        cursorMs += durationMs;
+        line.endTime = cursorMs / 1000;
+        cursorMs += holdMs + (cfg.lineHoldMsAfterComplete || 0);
+      } else {
+        const endMs = (Number(line.endTime) || 0) * 1000;
+        cursorMs = Math.max(cursorMs, endMs + (cfg.lineHoldMsAfterComplete || 0));
+      }
+    }
+    timelineLines = lines;
+    timelineState.durationMs = Math.max(0, cursorMs);
+    updateTimelineDisplay();
   }
 
   function getActiveTimelineIndex(timeSec, lines) {
@@ -2874,17 +2908,13 @@ ${String(err)}`);
         buildFromPlainLines(font, lines);
       }
 
-      camera.position.set(0, 0, cfg.cameraDistance);
-      camera.lookAt(new THREE.Vector3(0,0,0));
-      render();
-
-      isPlaying = true;
       if (lineObjs.length === 0) {
-        isPlaying = false;
         setStatus('No lines to play.');
         return;
       }
-      runSequence(0);
+      prepareTimelineFromLineObjs(lineObjs);
+      setTimelineTime(0);
+      playTimelinePlayback();
     } catch (err) {
       isPlaying = false;
       setStatus('Replay failed: ' + String(err));
@@ -2960,6 +2990,7 @@ ${String(err)}`);
 
   if (!canvas.captureStream || !window.MediaRecorder) {
     btnRecord.disabled = true;
+    btnRecordFull.disabled = true;
     btnRecord.title = 'Recording not supported in this browser.';
   }
 
@@ -2974,12 +3005,17 @@ ${String(err)}`);
     setTimeout(() => URL.revokeObjectURL(url), 5000);
   }
 
-  function startRecording() {
+  function startRecording({ resetTimeline = false, autoStopAtEnd = false } = {}) {
     if (recordingActive) return;
     if (!canvas.captureStream || !window.MediaRecorder) {
       setStatus('Recording not supported in this browser.\nTry Chrome/Edge on desktop.\n(iOS Safari often blocks WebM MediaRecorder)');
       btnRecord.disabled = true;
+      btnRecordFull.disabled = true;
       return;
+    }
+
+    if (resetTimeline && timelineLines.length) {
+      setTimelineTime(0);
     }
 
     const stream = canvas.captureStream(60);
@@ -2995,6 +3031,7 @@ ${String(err)}`);
     recordedChunks = [];
     recordingActive = true;
     btnRecord.disabled = true;
+    btnRecordFull.disabled = true;
     btnStop.disabled = false;
 
     mediaRecorder.ondataavailable = (ev) => {
@@ -3006,6 +3043,7 @@ ${String(err)}`);
       btnRecord.style.display = '';
       btnStop.style.display = 'none';
       btnRecord.disabled = false;
+      btnRecordFull.disabled = false;
       btnStop.disabled = true;
 
       const blob = new Blob(recordedChunks, { type: (mediaRecorder && mediaRecorder.mimeType) || 'video/webm' });
@@ -3020,6 +3058,10 @@ ${String(err)}`);
     btnRecord.style.display = 'none';
     btnStop.style.display = '';
     setStatus(`Recording…\nMime: ${mediaRecorder.mimeType || '(default)'}`);
+
+    if (autoStopAtEnd && timelineLines.length && !timelineState.isPlaying) {
+      playTimelinePlayback({ onStop: () => stopRecording() });
+    }
   }
 
   function stopRecording() {
@@ -3027,7 +3069,14 @@ ${String(err)}`);
     try { mediaRecorder.stop(); } catch (e) { setStatus('Stop failed:\n' + String(e)); }
   }
 
-  btnRecord.addEventListener('click', startRecording);
+  btnRecord.addEventListener('click', () => startRecording());
+  btnRecordFull.addEventListener('click', () => {
+    if (!timelineLines.length) {
+      setStatus('No timeline captions loaded.');
+      return;
+    }
+    startRecording({ resetTimeline: true, autoStopAtEnd: true });
+  });
   btnStop.addEventListener('click', stopRecording);
 
   // -------------------------

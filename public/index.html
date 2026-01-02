@@ -409,8 +409,8 @@
       <h4>Export</h4>
       <button id="btnRenderVertical">Render Vertical (server)</button>
       <div class="row">
-        <button id="btnRecord">Record (WebM)</button>
-        <button id="btnStop">Stop</button>
+        <button id="btnRecord">Record Canvas (WebM)</button>
+        <button id="btnStop">Stop Recording</button>
       </div>
       <div class="progress"><span id="renderProgress"></span></div>
       <div class="muted" id="renderStatus">Server render job idle.</div>
@@ -940,6 +940,10 @@
   const cfgApplyBtn = document.getElementById('cfgApply');
 
   function setStatus(msg) { statusEl.textContent = msg; }
+
+  btnStop.style.display = 'none';
+  btnRecord.disabled = false;
+  btnStop.disabled = true;
 
   // Collapsible main UI panel
   function setUiCollapsed(isCollapsed) {
@@ -2954,6 +2958,11 @@ ${String(err)}`);
     return '';
   }
 
+  if (!canvas.captureStream || !window.MediaRecorder) {
+    btnRecord.disabled = true;
+    btnRecord.title = 'Recording not supported in this browser.';
+  }
+
   function downloadBlob(blob, filename) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -2969,6 +2978,7 @@ ${String(err)}`);
     if (recordingActive) return;
     if (!canvas.captureStream || !window.MediaRecorder) {
       setStatus('Recording not supported in this browser.\nTry Chrome/Edge on desktop.\n(iOS Safari often blocks WebM MediaRecorder)');
+      btnRecord.disabled = true;
       return;
     }
 
@@ -2984,6 +2994,8 @@ ${String(err)}`);
 
     recordedChunks = [];
     recordingActive = true;
+    btnRecord.disabled = true;
+    btnStop.disabled = false;
 
     mediaRecorder.ondataavailable = (ev) => {
       if (ev.data && ev.data.size > 0) recordedChunks.push(ev.data);
@@ -2993,6 +3005,8 @@ ${String(err)}`);
       recordingActive = false;
       btnRecord.style.display = '';
       btnStop.style.display = 'none';
+      btnRecord.disabled = false;
+      btnStop.disabled = true;
 
       const blob = new Blob(recordedChunks, { type: (mediaRecorder && mediaRecorder.mimeType) || 'video/webm' });
       recordedChunks = [];

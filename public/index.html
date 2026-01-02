@@ -1711,7 +1711,6 @@
   }
 
   function renderTimelineFrame(now) {
-    if (captionSourceState.mode !== 'srt' && captionSourceState.mode !== 'cues') return;
     if (!timelineLines.length) {
       clearTimelineScene();
       setActiveCaptionPreview('');
@@ -3231,6 +3230,9 @@ ${String(err)}`);
       const wpl = Number(wplEl.value);
       const timedLines = transcriptionToTimedLines(transcriptionData, wpl);
       buildFromTimedLines(fontRef, timedLines);
+      prepareTimelineFromLineObjs(lineObjs);
+      setTimelineTime(timelineState.currentMs || 0);
+      renderTimelineFrame(performance.now());
       return;
     }
 
@@ -3242,6 +3244,9 @@ ${String(err)}`);
 
     const lines = await loadLines(cfg.linesUrl);
     buildFromPlainLines(fontRef, lines);
+    prepareTimelineFromLineObjs(lineObjs);
+    setTimelineTime(timelineState.currentMs || 0);
+    renderTimelineFrame(performance.now());
   }
 
   cfgApplyBtn.addEventListener('click', async () => {

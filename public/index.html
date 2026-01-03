@@ -127,7 +127,9 @@
       flex: 1;
       overflow-y: auto;
       padding-right: 4px;
+      padding-bottom: calc(24px + env(safe-area-inset-bottom));
       -webkit-overflow-scrolling: touch;
+      touch-action: pan-y;
     }
 
     #uiBody::-webkit-scrollbar { width: 8px; }
@@ -408,9 +410,9 @@
     <div class="panel" id="exportPanel">
       <h4>Export</h4>
       <button id="btnRenderVertical">Render Vertical (server)</button>
-      <div class="row">
-        <button id="btnRecord">Record (WebM)</button>
-        <button id="btnStop">Stop</button>
+      <div class="row wrap">
+        <button id="btnRecord">Record Canvas (WebM)</button>
+        <button id="btnStop">Stop Recording</button>
       </div>
       <div class="progress"><span id="renderProgress"></span></div>
       <div class="muted" id="renderStatus">Server render job idle.</div>
@@ -798,15 +800,12 @@
       shader.uniforms.uNoiseStrength = { value: 0.08 };
       shader.uniforms.uNoiseScale = { value: 1.0 };
 
-      shader.fragmentShader = shader.fragmentShader.replace(
-        '#include <map_fragment>',
-        `
-        #include <map_fragment>
-        vec2 noiseUv = vUv * uNoiseScale;
-        float noise = texture2D(uNoiseMap, noiseUv).r;
-        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * (0.92 + noise * 0.16), uNoiseStrength);
-        `
+      const patched = AnimationHelpers.patchNoiseShaderSources(
+        shader.vertexShader,
+        shader.fragmentShader
       );
+      shader.vertexShader = patched.vertexShader;
+      shader.fragmentShader = patched.fragmentShader;
 
       material.userData.shader = shader;
     };
@@ -882,6 +881,7 @@
   let timelineLineSource = [];
   let timelineRafId = null;
   let timelineLastTick = null;
+  let timelineStopCallback = null;
 
   let stackedLineCount = 0;
   const stackedGroups = [];
@@ -943,6 +943,10 @@
   const cfgApplyBtn = document.getElementById('cfgApply');
 
   function setStatus(msg) { statusEl.textContent = msg; }
+
+  btnStop.style.display = 'none';
+  btnRecord.disabled = false;
+  btnStop.disabled = true;
 
   // Collapsible main UI panel
   function setUiCollapsed(isCollapsed) {
@@ -1476,6 +1480,7 @@
       timelineState.durationMs = 0;
       setTimelineTime(0, { silent: true });
       setActiveCaptionPreview('');
+      updateTimelineDisplay();
     }
     persistState();
   }
@@ -1491,7 +1496,7 @@
   function setTimelineTime(ms, { silent = false } = {}) {
     timelineState.currentMs = Math.max(0, Math.min(timelineState.durationMs, Number(ms) || 0));
     updateTimelineDisplay();
-    if (!silent && (captionSourceState.mode === 'srt' || captionSourceState.mode === 'cues')) {
+    if (!silent && timelineLines.length) {
       renderTimelineFrame();
     }
   }
@@ -1511,9 +1516,14 @@
       timelineRafId = null;
     }
     timelineLastTick = null;
+    if (typeof timelineStopCallback === 'function') {
+      const cb = timelineStopCallback;
+      timelineStopCallback = null;
+      cb();
+    }
   }
 
-  function playTimelinePlayback() {
+  function playTimelinePlayback({ onStop } = {}) {
     if (!timelineLines.length) {
       setStatus('No timeline captions loaded.');
       return;
@@ -1521,6 +1531,7 @@
     if (timelineState.isPlaying) return;
     timelineState.isPlaying = true;
     timelineLastTick = performance.now();
+    if (onStop) timelineStopCallback = onStop;
 
     const tick = (now) => {
       if (!timelineState.isPlaying) return;
@@ -1544,6 +1555,29 @@
     render();
   }
 
+  function prepareTimelineFromLineObjs(lines) {
+    let cursorMs = 0;
+    for (const line of lines) {
+      const hasTiming = typeof line.startTime === 'number' && typeof line.endTime === 'number';
+      if (!hasTiming) {
+        const pauseMs = Math.max(0, line.pauseMs || 0);
+        const holdMs = Math.max(0, line.holdMs || 0);
+        cursorMs += pauseMs;
+        const durationMs = Math.max(50, line.durationMs || 0);
+        line.startTime = cursorMs / 1000;
+        cursorMs += durationMs;
+        line.endTime = cursorMs / 1000;
+        cursorMs += holdMs + (cfg.lineHoldMsAfterComplete || 0);
+      } else {
+        const endMs = (Number(line.endTime) || 0) * 1000;
+        cursorMs = Math.max(cursorMs, endMs + (cfg.lineHoldMsAfterComplete || 0));
+      }
+    }
+    timelineLines = lines;
+    timelineState.durationMs = Math.max(0, cursorMs);
+    updateTimelineDisplay();
+  }
+
   function getActiveTimelineIndex(timeSec, lines) {
     for (let i = 0; i < lines.length; i++) {
       if (timeSec >= lines[i].startTime && timeSec <= lines[i].endTime) return i;
@@ -1565,11 +1599,44 @@
     }
   }
 
+  function finalizeLineVisibility(lineObj) {
+    if (!lineObj?.meshes) return;
+    for (const mesh of lineObj.meshes) {
+      mesh.visible = true;
+      mesh.material.opacity = 1;
+      mesh.userData.revealStart = 0;
+      mesh.userData.revealed = true;
+      mesh.scale.setScalar(1);
+      mesh.position.copy(mesh.userData.basePos);
+    }
+  }
+
   function ensureActiveTimelineLine(index) {
     if (index === timelineState.activeIndex) return;
-    clearAllLinesFromScene();
+
+    const keepStacked = cfg.keepPreviousLinesVisible && cfg.stackLines;
+    const movingForward = index > timelineState.activeIndex;
+
+    if (!keepStacked || !movingForward) {
+      clearAllLinesFromScene();
+      stackedGroups.length = 0;
+    }
+
     timelineState.activeIndex = index;
     if (index < 0) return;
+
+    if (keepStacked) {
+      for (let i = 0; i < index; i++) {
+        const prev = timelineLines[i];
+        if (!prev || stackedGroups.includes(prev.group)) continue;
+        prev.group.position.y = 0;
+        finalizeLineVisibility(prev);
+        stackedGroups.push(prev.group);
+      }
+      enforceStackLimit();
+      reflowStackedGroups();
+    }
+
     const lineObj = timelineLines[index];
     if (!lineObj) return;
     lineObj.group.position.y = 0;
@@ -1679,7 +1746,6 @@
   }
 
   function renderTimelineFrame(now) {
-    if (captionSourceState.mode !== 'srt' && captionSourceState.mode !== 'cues') return;
     if (!timelineLines.length) {
       clearTimelineScene();
       setActiveCaptionPreview('');
@@ -2360,8 +2426,10 @@ ${String(err)}`);
         ? (cfg.activeGlowBoost || 0.22)
         : (cfg.neighborGlowBoost || 0.12);
       const emissiveScale = emphasisTone + boost * next;
-      m.material.emissive.copy(baseColor).multiplyScalar(emissiveScale);
-      m.material.emissiveIntensity = 1.05 + (m.userData.emphasis ? 0.35 : 0.15) * next;
+      if (m.material?.emissive?.copy) {
+        m.material.emissive.copy(baseColor).multiplyScalar(emissiveScale);
+        m.material.emissiveIntensity = 1.05 + (m.userData.emphasis ? 0.35 : 0.15) * next;
+      }
 
       // Keep emphasis scale visible even after reveal completes
       if (m.userData.revealStart === null) {
@@ -2873,17 +2941,13 @@ ${String(err)}`);
         buildFromPlainLines(font, lines);
       }
 
-      camera.position.set(0, 0, cfg.cameraDistance);
-      camera.lookAt(new THREE.Vector3(0,0,0));
-      render();
-
-      isPlaying = true;
       if (lineObjs.length === 0) {
-        isPlaying = false;
         setStatus('No lines to play.');
         return;
       }
-      runSequence(0);
+      prepareTimelineFromLineObjs(lineObjs);
+      setTimelineTime(0);
+      playTimelinePlayback();
     } catch (err) {
       isPlaying = false;
       setStatus('Replay failed: ' + String(err));
@@ -2948,6 +3012,7 @@ ${String(err)}`);
   let mediaRecorder = null;
   let recordedChunks = [];
   let recordingActive = false;
+  let recordingUiState = null;
 
   function pickMimeType() {
     const candidates = ['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'];
@@ -2955,6 +3020,11 @@ ${String(err)}`);
       if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) return t;
     }
     return '';
+  }
+
+  if (!canvas.captureStream || !window.MediaRecorder) {
+    btnRecord.disabled = true;
+    btnRecord.title = 'Recording not supported in this browser.';
   }
 
   function downloadBlob(blob, filename) {
@@ -2965,14 +3035,22 @@ ${String(err)}`);
     document.body.appendChild(a);
     a.click();
     a.remove();
+    renderDownloadEl.textContent = `Download ${filename}`;
+    renderDownloadEl.href = url;
+    renderDownloadEl.download = filename;
     setTimeout(() => URL.revokeObjectURL(url), 5000);
   }
 
-  function startRecording() {
+  function startRecording({ resetTimeline = false, autoPlay = false, autoStopAtEnd = false, preRollMs = 180 } = {}) {
     if (recordingActive) return;
     if (!canvas.captureStream || !window.MediaRecorder) {
       setStatus('Recording not supported in this browser.\nTry Chrome/Edge on desktop.\n(iOS Safari often blocks WebM MediaRecorder)');
+      btnRecord.disabled = true;
       return;
+    }
+
+    if (resetTimeline && timelineLines.length) {
+      setTimelineTime(0);
     }
 
     const stream = canvas.captureStream(60);
@@ -2987,6 +3065,15 @@ ${String(err)}`);
 
     recordedChunks = [];
     recordingActive = true;
+    btnRecord.disabled = true;
+    btnStop.disabled = false;
+    recordingUiState = {
+      collapsed: ui.classList.contains('collapsed'),
+    };
+    setUiCollapsed(true);
+    renderDownloadEl.textContent = '';
+    renderDownloadEl.href = '';
+    renderDownloadEl.removeAttribute('download');
 
     mediaRecorder.ondataavailable = (ev) => {
       if (ev.data && ev.data.size > 0) recordedChunks.push(ev.data);
@@ -2996,6 +3083,12 @@ ${String(err)}`);
       recordingActive = false;
       btnRecord.style.display = '';
       btnStop.style.display = 'none';
+      btnRecord.disabled = false;
+      btnStop.disabled = true;
+      if (recordingUiState) {
+        setUiCollapsed(recordingUiState.collapsed);
+        recordingUiState = null;
+      }
 
       const blob = new Blob(recordedChunks, { type: (mediaRecorder && mediaRecorder.mimeType) || 'video/webm' });
       recordedChunks = [];
@@ -3009,6 +3102,18 @@ ${String(err)}`);
     btnRecord.style.display = 'none';
     btnStop.style.display = '';
     setStatus(`Recording…\nMime: ${mediaRecorder.mimeType || '(default)'}`);
+
+    if (timelineLines.length) {
+      renderTimelineFrame(performance.now());
+    }
+
+    if (autoPlay && timelineLines.length && !timelineState.isPlaying) {
+      const triggerPlay = () => {
+        playTimelinePlayback({ onStop: autoStopAtEnd ? () => stopRecording() : undefined });
+      };
+      if (preRollMs > 0) setTimeout(triggerPlay, preRollMs);
+      else triggerPlay();
+    }
   }
 
   function stopRecording() {
@@ -3016,7 +3121,13 @@ ${String(err)}`);
     try { mediaRecorder.stop(); } catch (e) { setStatus('Stop failed:\n' + String(e)); }
   }
 
-  btnRecord.addEventListener('click', startRecording);
+  btnRecord.addEventListener('click', () => {
+    if (!timelineLines.length) {
+      setStatus('No timeline captions loaded.');
+      return;
+    }
+    startRecording({ resetTimeline: true, autoPlay: true, autoStopAtEnd: true });
+  });
   btnStop.addEventListener('click', stopRecording);
 
   // -------------------------
@@ -3162,6 +3273,9 @@ ${String(err)}`);
       const wpl = Number(wplEl.value);
       const timedLines = transcriptionToTimedLines(transcriptionData, wpl);
       buildFromTimedLines(fontRef, timedLines);
+      prepareTimelineFromLineObjs(lineObjs);
+      setTimelineTime(timelineState.currentMs || 0);
+      renderTimelineFrame(performance.now());
       return;
     }
 
@@ -3173,6 +3287,9 @@ ${String(err)}`);
 
     const lines = await loadLines(cfg.linesUrl);
     buildFromPlainLines(fontRef, lines);
+    prepareTimelineFromLineObjs(lineObjs);
+    setTimelineTime(timelineState.currentMs || 0);
+    renderTimelineFrame(performance.now());
   }
 
   cfgApplyBtn.addEventListener('click', async () => {

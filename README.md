@@ -41,6 +41,7 @@ Optional: set `MEDIA_SYNC_BASE_URL` to post the generated `.srt` to media-syncâ€
 
 UI additions:
 - Caption Source panel lets you switch between legacy Lines mode and SRT/Cues mode driven by `/api/captions/*`.
+- Demo Lines panel lets you paste manual caption lines (stored in `cfg.customLines`) for quick previews.
 - Timeline controls add a playhead, scrub slider, and active caption preview for timed captions.
 - Sync controls apply a millisecond offset when cues need nudging.
 

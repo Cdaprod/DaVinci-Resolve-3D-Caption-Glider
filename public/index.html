@@ -107,6 +107,19 @@
     #ui label { display:block; margin-top:10px; opacity: 0.95; }
     #ui input[type="range"] { width: 100%; margin-top: 6px; }
     #ui input[type="checkbox"] { transform: translateY(1px); }
+    #ui textarea {
+      width: 100%;
+      min-height: 120px;
+      resize: vertical;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(0,0,0,0.35);
+      color: #fff;
+      padding: 8px;
+      margin-top: 6px;
+      font-family: inherit;
+      font-size: 12px;
+    }
     #ui .row { display:flex; gap:8px; }
     #ui .row button { width: 50%; }
     #ui .row.tight button { width: auto; flex: 1; }
@@ -127,6 +140,7 @@
       flex: 1;
       overflow-y: auto;
       padding-right: 4px;
+      padding-bottom: 18px;
       -webkit-overflow-scrolling: touch;
     }
 
@@ -373,6 +387,19 @@
       <small class="muted">Lines mode uses cfg.linesUrl. SRT/Cues mode resolves from the media URL.</small>
     </div>
 
+    <div class="panel" id="demoLinesPanel">
+      <h4>Demo Lines (manual)</h4>
+      <label>
+        Custom lines (one caption per line)
+        <textarea id="demoLinesInput" placeholder="Type each caption on its own line…"></textarea>
+      </label>
+      <div class="row tight">
+        <button id="btnApplyDemoLines">Apply Lines</button>
+        <button id="btnClearDemoLines">Reset</button>
+      </div>
+      <small class="muted">Applies to Lines mode. Clear to revert to demo-lines.txt.</small>
+    </div>
+
     <div class="panel" id="timelinePanel">
       <h4>Timeline</h4>
       <div class="inline-input">
@@ -519,6 +546,7 @@
     fontId: 'helvetiker',
     fontUrl: 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/fonts/helvetiker_regular.typeface.json',
     fontFormat: 'typeface',
+    customLines: '',
 
       typographyProfile: (window.AnimationHelpers?.DEFAULT_TYPOGRAPHY_PROFILE_ID) || 'manual',
 
@@ -874,6 +902,7 @@
     currentMs: 0,
     isPlaying: false,
     activeIndex: -1,
+    lastRenderMs: null,
   };
   let timelineLines = [];
   let timelineLineSource = [];
@@ -900,6 +929,9 @@
   const mediaUrlInput = document.getElementById('mediaUrlInput');
   const btnLoadCaptionSource = document.getElementById('btnLoadCaptionSource');
   const btnClearCaptionSource = document.getElementById('btnClearCaptionSource');
+  const demoLinesInput = document.getElementById('demoLinesInput');
+  const btnApplyDemoLines = document.getElementById('btnApplyDemoLines');
+  const btnClearDemoLines = document.getElementById('btnClearDemoLines');
   const timelineTimecodeEl = document.getElementById('timelineTimecode');
   const timelineDurationEl = document.getElementById('timelineDuration');
   const timelineRangeEl = document.getElementById('timelineRange');
@@ -1013,6 +1045,21 @@
   mediaUrlInput?.addEventListener('input', () => {
     captionSourceState.mediaUrl = mediaUrlInput.value || '';
     persistState();
+  });
+
+  btnApplyDemoLines?.addEventListener('click', async () => {
+    cfg.customLines = demoLinesInput.value || '';
+    persistState();
+    setCaptionSourceMode('lines');
+    await replay();
+  });
+
+  btnClearDemoLines?.addEventListener('click', async () => {
+    demoLinesInput.value = '';
+    cfg.customLines = '';
+    persistState();
+    setCaptionSourceMode('lines');
+    await replay();
   });
 
   btnLoadCaptionSource?.addEventListener('click', () => loadCaptionSource());
@@ -1157,6 +1204,13 @@
     if (preset?.format) {
       cfg.fontFormat = preset.format;
     }
+  }
+
+  function splitManualLines(rawText = '') {
+    return String(rawText || '')
+      .split(/\r?\n/)
+      .map(s => s.trim())
+      .filter(Boolean);
   }
 
   function applyTypographyProfileSelection(profileId, { silent = false } = {}) {
@@ -1334,6 +1388,7 @@
       applyTextAlignSelection(cfg.textAlign, { silent: true });
       applyTheme(cfg.theme);
       syncWorkspaceInputs();
+      demoLinesInput.value = cfg.customLines || '';
 
       setCaptionSourceMode(captionSourceState.mode);
       mediaUrlInput.value = captionSourceState.mediaUrl || '';
@@ -1556,6 +1611,9 @@
   function prepareTimelineFromLineObjs(lines) {
     let cursorMs = 0;
     for (const line of lines) {
+      if (line?.group?.userData) {
+        line.group.userData.paragraphBreaks = line.paragraphBreaks || 0;
+      }
       const hasTiming = typeof line.startTime === 'number' && typeof line.endTime === 'number';
       if (!hasTiming) {
         const pauseMs = Math.max(0, line.pauseMs || 0);
@@ -1598,15 +1656,44 @@
   }
 
   function ensureActiveTimelineLine(index) {
-    if (index === timelineState.activeIndex) return;
-    clearAllLinesFromScene();
+    if (!cfg.keepPreviousLinesVisible || !cfg.stackLines) {
+      if (index === timelineState.activeIndex) return;
+      clearAllLinesFromScene();
+      timelineState.activeIndex = index;
+      if (index < 0) return;
+      const lineObj = timelineLines[index];
+      if (!lineObj) return;
+      lineObj.group.position.y = 0;
+      resetLineRevealState(lineObj);
+      scene.add(lineObj.group);
+      return;
+    }
+
+    const max = Math.max(1, Number(cfg.stackMaxLines || 1));
+    const startIndex = Math.max(0, index - (max - 1));
+    const indices = [];
+    for (let i = startIndex; i <= index; i++) indices.push(i);
+    const nextGroups = [];
+    for (const i of indices) {
+      const lineObj = timelineLines[i];
+      if (!lineObj?.group) continue;
+      if (!scene.children.includes(lineObj.group)) {
+        resetLineRevealState(lineObj);
+        scene.add(lineObj.group);
+      }
+      nextGroups.push(lineObj.group);
+    }
+
+    for (const g of stackedGroups) {
+      if (!nextGroups.includes(g)) {
+        scene.remove(g);
+      }
+    }
+
+    stackedGroups.length = 0;
+    for (const g of nextGroups) stackedGroups.push(g);
     timelineState.activeIndex = index;
-    if (index < 0) return;
-    const lineObj = timelineLines[index];
-    if (!lineObj) return;
-    lineObj.group.position.y = 0;
-    resetLineRevealState(lineObj);
-    scene.add(lineObj.group);
+    reflowStackedGroups();
   }
 
   function renderLineAtTime(lineObj, currentTimeSec, now) {
@@ -1718,6 +1805,10 @@
     }
     const offsetMs = getEffectiveOffsetMs();
     const currentSec = (timelineState.currentMs + offsetMs) / 1000;
+    if (typeof timelineState.lastRenderMs === 'number' && timelineState.currentMs < timelineState.lastRenderMs) {
+      clearAllLinesFromScene();
+    }
+    timelineState.lastRenderMs = timelineState.currentMs;
     const activeIndex = getActiveTimelineIndex(currentSec, timelineLines);
     ensureActiveTimelineLine(activeIndex);
     if (activeIndex < 0) {
@@ -2900,7 +2991,8 @@ ${String(err)}`);
         const timedLines = transcriptionToTimedLines(transcriptionData, wpl);
         buildFromTimedLines(font, timedLines);
       } else {
-        const lines = await loadLines(cfg.linesUrl);
+        const manualLines = splitManualLines(cfg.customLines);
+        const lines = manualLines.length ? manualLines : await loadLines(cfg.linesUrl);
         buildFromPlainLines(font, lines);
       }
 
@@ -3248,7 +3340,8 @@ ${String(err)}`);
       return;
     }
 
-    const lines = await loadLines(cfg.linesUrl);
+    const manualLines = splitManualLines(cfg.customLines);
+    const lines = manualLines.length ? manualLines : await loadLines(cfg.linesUrl);
     buildFromPlainLines(fontRef, lines);
     prepareTimelineFromLineObjs(lineObjs);
     setTimelineTime(timelineState.currentMs || 0);

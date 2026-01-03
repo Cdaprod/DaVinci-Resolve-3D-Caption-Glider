@@ -404,6 +404,7 @@ function testRecordingUiHooked() {
   const html = fs.readFileSync(indexPath, 'utf8');
   assert.ok(html.includes('btnRecord'), 'Record button id should exist');
   assert.ok(html.includes('btnStop'), 'Stop button id should exist');
+  assert.ok(html.includes('demoLinesInput'), 'Demo lines input should exist');
   assert.ok(html.includes('canvas.captureStream(60)'), 'captureStream should target 60fps');
   assert.ok(html.includes('MediaRecorder'), 'MediaRecorder should be referenced');
   assert.ok(!html.includes("captionSourceState.mode !== 'srt'"), 'timeline rendering should not be gated to SRT mode');

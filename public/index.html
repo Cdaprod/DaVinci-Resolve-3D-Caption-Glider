@@ -107,6 +107,19 @@
     #ui label { display:block; margin-top:10px; opacity: 0.95; }
     #ui input[type="range"] { width: 100%; margin-top: 6px; }
     #ui input[type="checkbox"] { transform: translateY(1px); }
+    #ui textarea {
+      width: 100%;
+      min-height: 120px;
+      resize: vertical;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(0,0,0,0.35);
+      color: #fff;
+      padding: 8px;
+      margin-top: 6px;
+      font-family: inherit;
+      font-size: 12px;
+    }
     #ui .row { display:flex; gap:8px; }
     #ui .row button { width: 50%; }
     #ui .row.tight button { width: auto; flex: 1; }
@@ -127,6 +140,7 @@
       flex: 1;
       overflow-y: auto;
       padding-right: 4px;
+      padding-bottom: 18px;
       -webkit-overflow-scrolling: touch;
     }
 
@@ -373,6 +387,19 @@
       <small class="muted">Lines mode uses cfg.linesUrl. SRT/Cues mode resolves from the media URL.</small>
     </div>
 
+    <div class="panel" id="demoLinesPanel">
+      <h4>Demo Lines (manual)</h4>
+      <label>
+        Custom lines (one caption per line)
+        <textarea id="demoLinesInput" placeholder="Type each caption on its own line…"></textarea>
+      </label>
+      <div class="row tight">
+        <button id="btnApplyDemoLines">Apply Lines</button>
+        <button id="btnClearDemoLines">Reset</button>
+      </div>
+      <small class="muted">Applies to Lines mode. Clear to revert to demo-lines.txt.</small>
+    </div>
+
     <div class="panel" id="timelinePanel">
       <h4>Timeline</h4>
       <div class="inline-input">
@@ -408,9 +435,9 @@
     <div class="panel" id="exportPanel">
       <h4>Export</h4>
       <button id="btnRenderVertical">Render Vertical (server)</button>
-      <div class="row">
-        <button id="btnRecord">Record (WebM)</button>
-        <button id="btnStop">Stop</button>
+      <div class="row wrap">
+        <button id="btnRecord">Record Canvas (WebM)</button>
+        <button id="btnStop">Stop Recording</button>
       </div>
       <div class="progress"><span id="renderProgress"></span></div>
       <div class="muted" id="renderStatus">Server render job idle.</div>
@@ -519,6 +546,7 @@
     fontId: 'helvetiker',
     fontUrl: 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/fonts/helvetiker_regular.typeface.json',
     fontFormat: 'typeface',
+    customLines: '',
 
       typographyProfile: (window.AnimationHelpers?.DEFAULT_TYPOGRAPHY_PROFILE_ID) || 'manual',
 
@@ -798,15 +826,12 @@
       shader.uniforms.uNoiseStrength = { value: 0.08 };
       shader.uniforms.uNoiseScale = { value: 1.0 };
 
-      shader.fragmentShader = shader.fragmentShader.replace(
-        '#include <map_fragment>',
-        `
-        #include <map_fragment>
-        vec2 noiseUv = vUv * uNoiseScale;
-        float noise = texture2D(uNoiseMap, noiseUv).r;
-        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * (0.92 + noise * 0.16), uNoiseStrength);
-        `
+      const patched = AnimationHelpers.patchNoiseShaderSources(
+        shader.vertexShader,
+        shader.fragmentShader
       );
+      shader.vertexShader = patched.vertexShader;
+      shader.fragmentShader = patched.fragmentShader;
 
       material.userData.shader = shader;
     };
@@ -877,11 +902,13 @@
     currentMs: 0,
     isPlaying: false,
     activeIndex: -1,
+    lastRenderMs: null,
   };
   let timelineLines = [];
   let timelineLineSource = [];
   let timelineRafId = null;
   let timelineLastTick = null;
+  let timelineStopCallback = null;
 
   let stackedLineCount = 0;
   const stackedGroups = [];
@@ -902,6 +929,9 @@
   const mediaUrlInput = document.getElementById('mediaUrlInput');
   const btnLoadCaptionSource = document.getElementById('btnLoadCaptionSource');
   const btnClearCaptionSource = document.getElementById('btnClearCaptionSource');
+  const demoLinesInput = document.getElementById('demoLinesInput');
+  const btnApplyDemoLines = document.getElementById('btnApplyDemoLines');
+  const btnClearDemoLines = document.getElementById('btnClearDemoLines');
   const timelineTimecodeEl = document.getElementById('timelineTimecode');
   const timelineDurationEl = document.getElementById('timelineDuration');
   const timelineRangeEl = document.getElementById('timelineRange');
@@ -943,6 +973,10 @@
   const cfgApplyBtn = document.getElementById('cfgApply');
 
   function setStatus(msg) { statusEl.textContent = msg; }
+
+  btnStop.style.display = 'none';
+  btnRecord.disabled = false;
+  btnStop.disabled = true;
 
   // Collapsible main UI panel
   function setUiCollapsed(isCollapsed) {
@@ -1011,6 +1045,21 @@
   mediaUrlInput?.addEventListener('input', () => {
     captionSourceState.mediaUrl = mediaUrlInput.value || '';
     persistState();
+  });
+
+  btnApplyDemoLines?.addEventListener('click', async () => {
+    cfg.customLines = demoLinesInput.value || '';
+    persistState();
+    setCaptionSourceMode('lines');
+    await replay();
+  });
+
+  btnClearDemoLines?.addEventListener('click', async () => {
+    demoLinesInput.value = '';
+    cfg.customLines = '';
+    persistState();
+    setCaptionSourceMode('lines');
+    await replay();
   });
 
   btnLoadCaptionSource?.addEventListener('click', () => loadCaptionSource());
@@ -1155,6 +1204,13 @@
     if (preset?.format) {
       cfg.fontFormat = preset.format;
     }
+  }
+
+  function splitManualLines(rawText = '') {
+    return String(rawText || '')
+      .split(/\r?\n/)
+      .map(s => s.trim())
+      .filter(Boolean);
   }
 
   function applyTypographyProfileSelection(profileId, { silent = false } = {}) {
@@ -1332,6 +1388,7 @@
       applyTextAlignSelection(cfg.textAlign, { silent: true });
       applyTheme(cfg.theme);
       syncWorkspaceInputs();
+      demoLinesInput.value = cfg.customLines || '';
 
       setCaptionSourceMode(captionSourceState.mode);
       mediaUrlInput.value = captionSourceState.mediaUrl || '';
@@ -1476,6 +1533,7 @@
       timelineState.durationMs = 0;
       setTimelineTime(0, { silent: true });
       setActiveCaptionPreview('');
+      updateTimelineDisplay();
     }
     persistState();
   }
@@ -1491,7 +1549,7 @@
   function setTimelineTime(ms, { silent = false } = {}) {
     timelineState.currentMs = Math.max(0, Math.min(timelineState.durationMs, Number(ms) || 0));
     updateTimelineDisplay();
-    if (!silent && (captionSourceState.mode === 'srt' || captionSourceState.mode === 'cues')) {
+    if (!silent && timelineLines.length) {
       renderTimelineFrame();
     }
   }
@@ -1511,9 +1569,14 @@
       timelineRafId = null;
     }
     timelineLastTick = null;
+    if (typeof timelineStopCallback === 'function') {
+      const cb = timelineStopCallback;
+      timelineStopCallback = null;
+      cb();
+    }
   }
 
-  function playTimelinePlayback() {
+  function playTimelinePlayback({ onStop } = {}) {
     if (!timelineLines.length) {
       setStatus('No timeline captions loaded.');
       return;
@@ -1521,6 +1584,7 @@
     if (timelineState.isPlaying) return;
     timelineState.isPlaying = true;
     timelineLastTick = performance.now();
+    if (onStop) timelineStopCallback = onStop;
 
     const tick = (now) => {
       if (!timelineState.isPlaying) return;
@@ -1542,6 +1606,32 @@
     clearAllLinesFromScene();
     timelineState.activeIndex = -1;
     render();
+  }
+
+  function prepareTimelineFromLineObjs(lines) {
+    let cursorMs = 0;
+    for (const line of lines) {
+      if (line?.group?.userData) {
+        line.group.userData.paragraphBreaks = line.paragraphBreaks || 0;
+      }
+      const hasTiming = typeof line.startTime === 'number' && typeof line.endTime === 'number';
+      if (!hasTiming) {
+        const pauseMs = Math.max(0, line.pauseMs || 0);
+        const holdMs = Math.max(0, line.holdMs || 0);
+        cursorMs += pauseMs;
+        const durationMs = Math.max(50, line.durationMs || 0);
+        line.startTime = cursorMs / 1000;
+        cursorMs += durationMs;
+        line.endTime = cursorMs / 1000;
+        cursorMs += holdMs + (cfg.lineHoldMsAfterComplete || 0);
+      } else {
+        const endMs = (Number(line.endTime) || 0) * 1000;
+        cursorMs = Math.max(cursorMs, endMs + (cfg.lineHoldMsAfterComplete || 0));
+      }
+    }
+    timelineLines = lines;
+    timelineState.durationMs = Math.max(0, cursorMs);
+    updateTimelineDisplay();
   }
 
   function getActiveTimelineIndex(timeSec, lines) {
@@ -1566,15 +1656,44 @@
   }
 
   function ensureActiveTimelineLine(index) {
-    if (index === timelineState.activeIndex) return;
-    clearAllLinesFromScene();
+    if (!cfg.keepPreviousLinesVisible || !cfg.stackLines) {
+      if (index === timelineState.activeIndex) return;
+      clearAllLinesFromScene();
+      timelineState.activeIndex = index;
+      if (index < 0) return;
+      const lineObj = timelineLines[index];
+      if (!lineObj) return;
+      lineObj.group.position.y = 0;
+      resetLineRevealState(lineObj);
+      scene.add(lineObj.group);
+      return;
+    }
+
+    const max = Math.max(1, Number(cfg.stackMaxLines || 1));
+    const startIndex = Math.max(0, index - (max - 1));
+    const indices = [];
+    for (let i = startIndex; i <= index; i++) indices.push(i);
+    const nextGroups = [];
+    for (const i of indices) {
+      const lineObj = timelineLines[i];
+      if (!lineObj?.group) continue;
+      if (!scene.children.includes(lineObj.group)) {
+        resetLineRevealState(lineObj);
+        scene.add(lineObj.group);
+      }
+      nextGroups.push(lineObj.group);
+    }
+
+    for (const g of stackedGroups) {
+      if (!nextGroups.includes(g)) {
+        scene.remove(g);
+      }
+    }
+
+    stackedGroups.length = 0;
+    for (const g of nextGroups) stackedGroups.push(g);
     timelineState.activeIndex = index;
-    if (index < 0) return;
-    const lineObj = timelineLines[index];
-    if (!lineObj) return;
-    lineObj.group.position.y = 0;
-    resetLineRevealState(lineObj);
-    scene.add(lineObj.group);
+    reflowStackedGroups();
   }
 
   function renderLineAtTime(lineObj, currentTimeSec, now) {
@@ -1679,7 +1798,6 @@
   }
 
   function renderTimelineFrame(now) {
-    if (captionSourceState.mode !== 'srt' && captionSourceState.mode !== 'cues') return;
     if (!timelineLines.length) {
       clearTimelineScene();
       setActiveCaptionPreview('');
@@ -1687,6 +1805,10 @@
     }
     const offsetMs = getEffectiveOffsetMs();
     const currentSec = (timelineState.currentMs + offsetMs) / 1000;
+    if (typeof timelineState.lastRenderMs === 'number' && timelineState.currentMs < timelineState.lastRenderMs) {
+      clearAllLinesFromScene();
+    }
+    timelineState.lastRenderMs = timelineState.currentMs;
     const activeIndex = getActiveTimelineIndex(currentSec, timelineLines);
     ensureActiveTimelineLine(activeIndex);
     if (activeIndex < 0) {
@@ -2869,21 +2991,18 @@ ${String(err)}`);
         const timedLines = transcriptionToTimedLines(transcriptionData, wpl);
         buildFromTimedLines(font, timedLines);
       } else {
-        const lines = await loadLines(cfg.linesUrl);
+        const manualLines = splitManualLines(cfg.customLines);
+        const lines = manualLines.length ? manualLines : await loadLines(cfg.linesUrl);
         buildFromPlainLines(font, lines);
       }
 
-      camera.position.set(0, 0, cfg.cameraDistance);
-      camera.lookAt(new THREE.Vector3(0,0,0));
-      render();
-
-      isPlaying = true;
       if (lineObjs.length === 0) {
-        isPlaying = false;
         setStatus('No lines to play.');
         return;
       }
-      runSequence(0);
+      prepareTimelineFromLineObjs(lineObjs);
+      setTimelineTime(0);
+      playTimelinePlayback();
     } catch (err) {
       isPlaying = false;
       setStatus('Replay failed: ' + String(err));
@@ -2948,6 +3067,7 @@ ${String(err)}`);
   let mediaRecorder = null;
   let recordedChunks = [];
   let recordingActive = false;
+  let recordingUiState = null;
 
   function pickMimeType() {
     const candidates = ['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'];
@@ -2955,6 +3075,11 @@ ${String(err)}`);
       if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) return t;
     }
     return '';
+  }
+
+  if (!canvas.captureStream || !window.MediaRecorder) {
+    btnRecord.disabled = true;
+    btnRecord.title = 'Recording not supported in this browser.';
   }
 
   function downloadBlob(blob, filename) {
@@ -2965,14 +3090,22 @@ ${String(err)}`);
     document.body.appendChild(a);
     a.click();
     a.remove();
+    renderDownloadEl.textContent = `Download ${filename}`;
+    renderDownloadEl.href = url;
+    renderDownloadEl.download = filename;
     setTimeout(() => URL.revokeObjectURL(url), 5000);
   }
 
-  function startRecording() {
+  function startRecording({ resetTimeline = false, autoPlay = false, autoStopAtEnd = false, preRollMs = 180 } = {}) {
     if (recordingActive) return;
     if (!canvas.captureStream || !window.MediaRecorder) {
       setStatus('Recording not supported in this browser.\nTry Chrome/Edge on desktop.\n(iOS Safari often blocks WebM MediaRecorder)');
+      btnRecord.disabled = true;
       return;
+    }
+
+    if (resetTimeline && timelineLines.length) {
+      setTimelineTime(0);
     }
 
     const stream = canvas.captureStream(60);
@@ -2987,6 +3120,15 @@ ${String(err)}`);
 
     recordedChunks = [];
     recordingActive = true;
+    btnRecord.disabled = true;
+    btnStop.disabled = false;
+    recordingUiState = {
+      collapsed: ui.classList.contains('collapsed'),
+    };
+    setUiCollapsed(true);
+    renderDownloadEl.textContent = '';
+    renderDownloadEl.href = '';
+    renderDownloadEl.removeAttribute('download');
 
     mediaRecorder.ondataavailable = (ev) => {
       if (ev.data && ev.data.size > 0) recordedChunks.push(ev.data);
@@ -2996,6 +3138,12 @@ ${String(err)}`);
       recordingActive = false;
       btnRecord.style.display = '';
       btnStop.style.display = 'none';
+      btnRecord.disabled = false;
+      btnStop.disabled = true;
+      if (recordingUiState) {
+        setUiCollapsed(recordingUiState.collapsed);
+        recordingUiState = null;
+      }
 
       const blob = new Blob(recordedChunks, { type: (mediaRecorder && mediaRecorder.mimeType) || 'video/webm' });
       recordedChunks = [];
@@ -3009,6 +3157,18 @@ ${String(err)}`);
     btnRecord.style.display = 'none';
     btnStop.style.display = '';
     setStatus(`Recording…\nMime: ${mediaRecorder.mimeType || '(default)'}`);
+
+    if (timelineLines.length) {
+      renderTimelineFrame(performance.now());
+    }
+
+    if (autoPlay && timelineLines.length && !timelineState.isPlaying) {
+      const triggerPlay = () => {
+        playTimelinePlayback({ onStop: autoStopAtEnd ? () => stopRecording() : undefined });
+      };
+      if (preRollMs > 0) setTimeout(triggerPlay, preRollMs);
+      else triggerPlay();
+    }
   }
 
   function stopRecording() {
@@ -3016,7 +3176,13 @@ ${String(err)}`);
     try { mediaRecorder.stop(); } catch (e) { setStatus('Stop failed:\n' + String(e)); }
   }
 
-  btnRecord.addEventListener('click', startRecording);
+  btnRecord.addEventListener('click', () => {
+    if (!timelineLines.length) {
+      setStatus('No timeline captions loaded.');
+      return;
+    }
+    startRecording({ resetTimeline: true, autoPlay: true, autoStopAtEnd: true });
+  });
   btnStop.addEventListener('click', stopRecording);
 
   // -------------------------
@@ -3162,6 +3328,9 @@ ${String(err)}`);
       const wpl = Number(wplEl.value);
       const timedLines = transcriptionToTimedLines(transcriptionData, wpl);
       buildFromTimedLines(fontRef, timedLines);
+      prepareTimelineFromLineObjs(lineObjs);
+      setTimelineTime(timelineState.currentMs || 0);
+      renderTimelineFrame(performance.now());
       return;
     }
 
@@ -3171,8 +3340,12 @@ ${String(err)}`);
       return;
     }
 
-    const lines = await loadLines(cfg.linesUrl);
+    const manualLines = splitManualLines(cfg.customLines);
+    const lines = manualLines.length ? manualLines : await loadLines(cfg.linesUrl);
     buildFromPlainLines(fontRef, lines);
+    prepareTimelineFromLineObjs(lineObjs);
+    setTimelineTime(timelineState.currentMs || 0);
+    renderTimelineFrame(performance.now());
   }
 
   cfgApplyBtn.addEventListener('click', async () => {

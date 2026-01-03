@@ -15,19 +15,20 @@ const {
   normalizeProfileToken,
   visibleHalfWidth,
   requiredDistanceForSpan,
-    sanitizePersistedState,
-    normalizePersistedPayload,
-    buildTextGeometrySpec,
-    TYPOGRAPHY_PROFILES,
-    DEFAULT_TYPOGRAPHY_PROFILE_ID,
-    applyTypographyProfile,
-    isValidFontResource,
-    normalizeFontResource,
-    normalizeTextAlign,
-    lineAlignmentOffset,
-    parseSrtCues,
-    buildCueWordTimings,
-  } = require('../public/animation-helpers');
+  sanitizePersistedState,
+  normalizePersistedPayload,
+  buildTextGeometrySpec,
+  TYPOGRAPHY_PROFILES,
+  DEFAULT_TYPOGRAPHY_PROFILE_ID,
+  applyTypographyProfile,
+  isValidFontResource,
+  normalizeFontResource,
+  normalizeTextAlign,
+  lineAlignmentOffset,
+  parseSrtCues,
+  buildCueWordTimings,
+  patchNoiseShaderSources,
+} = require('../public/animation-helpers');
 
 function testClamp01() {
   assert.strictEqual(clamp01(-1), 0);
@@ -50,6 +51,17 @@ function testNormalizeFontResource() {
   const normalized = normalizeFontResource(font, 900);
   assert.strictEqual(normalized.data.resolution, 900);
   assert.strictEqual(isValidFontResource(normalized), true);
+
+  const stringResolution = { data: { glyphs: { B: {} }, resolution: '1000' } };
+  const normalizedString = normalizeFontResource(stringResolution, 800);
+  assert.strictEqual(normalizedString.data.resolution, 1000);
+  assert.strictEqual(isValidFontResource(normalizedString), true);
+
+  const rootGlyphs = { glyphs: { C: {} }, data: null };
+  const normalizedRoot = normalizeFontResource(rootGlyphs, 700);
+  assert.strictEqual(normalizedRoot.data.resolution, 700);
+  assert.deepStrictEqual(normalizedRoot.data.glyphs, rootGlyphs.glyphs);
+  assert.strictEqual(isValidFontResource(normalizedRoot), true);
 }
 
 function testComputeCenterBounds() {
@@ -220,6 +232,28 @@ function testBreakTokensAccumulate() {
   assert.strictEqual(segments[2].breaks, 2);
 }
 
+function testPatchNoiseShaderSources() {
+  const vertexShader = `
+    varying vec2 vUv;
+    void main() {
+      #include <begin_vertex>
+    }
+  `;
+
+  const fragmentShader = `
+    varying vec2 vUv;
+    void main() {
+      #include <map_fragment>
+    }
+  `;
+
+  const patched = patchNoiseShaderSources(vertexShader, fragmentShader);
+  assert.ok(patched.vertexShader.includes('vNoiseUv'));
+  assert.ok(patched.vertexShader.includes('vNoiseUv = position.xy'));
+  assert.ok(patched.fragmentShader.includes('uNoiseMap'));
+  assert.ok(patched.fragmentShader.includes('vNoiseUv * uNoiseScale'));
+}
+
 function testVisibleHalfWidth() {
   const half = visibleHalfWidth(3.5, 1, 50);
   assert(half > 1 && half < 3, 'visible half width should scale with distance and fov');
@@ -365,6 +399,18 @@ function testSeedThemesMatchPalettes() {
   }
 }
 
+function testRecordingUiHooked() {
+  const indexPath = path.join(__dirname, '..', 'public', 'index.html');
+  const html = fs.readFileSync(indexPath, 'utf8');
+  assert.ok(html.includes('btnRecord'), 'Record button id should exist');
+  assert.ok(html.includes('btnStop'), 'Stop button id should exist');
+  assert.ok(html.includes('demoLinesInput'), 'Demo lines input should exist');
+  assert.ok(html.includes('canvas.captureStream(60)'), 'captureStream should target 60fps');
+  assert.ok(html.includes('MediaRecorder'), 'MediaRecorder should be referenced');
+  assert.ok(!html.includes("captionSourceState.mode !== 'srt'"), 'timeline rendering should not be gated to SRT mode');
+  assert.ok(html.includes('renderDownloadEl.download'), 'download link should be set for recordings');
+}
+
 function run() {
   testClamp01();
   testIsValidFontResource();
@@ -375,6 +421,7 @@ function run() {
   testParseScriptLines();
   testParseScriptLinesDefaultFirst();
   testBreakTokensAccumulate();
+  testPatchNoiseShaderSources();
   testStripControlTokens();
   testNormalizeProfileToken();
   testNormalizeTextAlignHelper();
@@ -389,6 +436,7 @@ function run() {
   testBuildCueWordTimings();
   testSeedFilesAreCleanObjects();
   testSeedThemesMatchPalettes();
+  testRecordingUiHooked();
   console.log('animation-helpers: all tests passed');
 }
 

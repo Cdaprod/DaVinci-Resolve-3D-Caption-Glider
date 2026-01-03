@@ -2998,6 +2998,9 @@ ${String(err)}`);
     document.body.appendChild(a);
     a.click();
     a.remove();
+    renderDownloadEl.textContent = `Download ${filename}`;
+    renderDownloadEl.href = url;
+    renderDownloadEl.download = filename;
     setTimeout(() => URL.revokeObjectURL(url), 5000);
   }
 
@@ -3031,6 +3034,9 @@ ${String(err)}`);
       collapsed: ui.classList.contains('collapsed'),
     };
     setUiCollapsed(true);
+    renderDownloadEl.textContent = '';
+    renderDownloadEl.href = '';
+    renderDownloadEl.removeAttribute('download');
 
     mediaRecorder.ondataavailable = (ev) => {
       if (ev.data && ev.data.size > 0) recordedChunks.push(ev.data);

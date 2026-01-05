@@ -417,6 +417,7 @@ function testRecordingUiHooked() {
   assert.ok(html.includes('padding-bottom: calc(24px + env(safe-area-inset-bottom))'), 'ui scroll padding should include safe area');
   assert.ok(html.includes('material?.emissive?.copy'), 'highlight update should guard emissive materials');
   assert.ok(html.includes("linesUrl: '/public/demo-lines.txt'"), 'default demo lines URL should point at /public');
+  assert.ok(html.includes('recordingDownloadUrl'), 'recording download URL should be tracked for cleanup');
 }
 
 function run() {

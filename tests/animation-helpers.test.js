@@ -62,6 +62,12 @@ function testNormalizeFontResource() {
   assert.strictEqual(normalizedRoot.data.resolution, 700);
   assert.deepStrictEqual(normalizedRoot.data.glyphs, rootGlyphs.glyphs);
   assert.strictEqual(isValidFontResource(normalizedRoot), true);
+
+  const rootGlyphsWithResolution = { glyphs: { D: {} }, resolution: 2048, data: null };
+  const normalizedRootWithResolution = normalizeFontResource(rootGlyphsWithResolution, 700);
+  assert.strictEqual(normalizedRootWithResolution.data.resolution, 2048);
+  assert.deepStrictEqual(normalizedRootWithResolution.data.glyphs, rootGlyphsWithResolution.glyphs);
+  assert.strictEqual(isValidFontResource(normalizedRootWithResolution), true);
 }
 
 function testComputeCenterBounds() {

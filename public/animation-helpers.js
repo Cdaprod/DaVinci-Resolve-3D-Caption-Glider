@@ -79,7 +79,9 @@
     if (!font || typeof font !== 'object') return font;
     if (!font.data || typeof font.data !== 'object') {
       if (font.glyphs && typeof font.glyphs === 'object') {
-        font.data = { glyphs: font.glyphs };
+        const lifted = { glyphs: font.glyphs };
+        if (font.resolution !== undefined) lifted.resolution = font.resolution;
+        font.data = lifted;
       } else {
         return font;
       }

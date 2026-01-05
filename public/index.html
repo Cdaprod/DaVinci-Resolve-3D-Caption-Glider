@@ -499,6 +499,7 @@
     <div id="mini">
       Export note: recording uses <code>canvas.captureStream</code> + <code>MediaRecorder</code>.
       Some iOS browsers may block WebM recording.
+      Demo lines load from <code>/public/demo-lines.txt</code> when running the LAN service.
       Script tokens: <code>#A/#B/#C</code> switch profiles, <code>#default</code> resets to base; <code>[PAUSE=ms]</code> / <code>[HOLD=ms]</code> apply to the next line; <code>[BREAK]</code> adds a blank paragraph gap before the next caption.
     </div>
   </div>
@@ -516,7 +517,7 @@
   // CONFIG (defaults)
   // -------------------------
   const DEFAULT_CFG = Object.freeze({
-    linesUrl: './demo-lines.txt',
+    linesUrl: '/public/demo-lines.txt',
 
     fontId: 'helvetiker',
     fontUrl: 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/fonts/helvetiker_regular.typeface.json',
@@ -2060,6 +2061,7 @@
   }
 
   async function loadLines(url) {
+    const fallbackUrl = DEFAULT_CFG.linesUrl;
     try {
       const res = await fetch(url, { cache: 'no-store' });
       if(!res.ok) throw new Error(`Failed to load lines: ${res.status} ${res.statusText}`);
@@ -2068,6 +2070,19 @@
       if (parsed.length === 0) throw new Error('lines file was empty');
       return parsed;
     } catch (err) {
+      if (url !== fallbackUrl) {
+        try {
+          const res = await fetch(fallbackUrl, { cache: 'no-store' });
+          if (!res.ok) throw new Error(`Failed to load lines: ${res.status} ${res.statusText}`);
+          const txt = await res.text();
+          const parsed = txt.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+          if (parsed.length === 0) throw new Error('lines file was empty');
+          return parsed;
+        } catch (fallbackErr) {
+          console.warn('loadLines fallback to built-in demo:', fallbackErr);
+          return [...FALLBACK_DEMO_LINES];
+        }
+      }
       console.warn('loadLines fallback to built-in demo:', err);
       return [...FALLBACK_DEMO_LINES];
     }

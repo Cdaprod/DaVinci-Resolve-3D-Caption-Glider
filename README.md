@@ -53,6 +53,8 @@ UI additions:
 
 Edit the `cfg` object in `public/index.html` (or use the built-in configuration drawer) to tune fonts, spacing, reveal style, alignment, emphasis profiles, and typography presets sourced from `docs/TYPOGRAPHY.md`. New UI selections persist to `captioner_state_v1` in localStorage and the seeded `public/localStorage.json` files.
 
+Default demo lines load from `/public/demo-lines.txt` when the FastAPI service is running (so the UI works correctly in Docker deployments).
+
 Caption derivation settings:
 - `SRT_MAP_MODE` — mapping rule for `media_url` (`captions_dir` default, or `side_by_side`)
 - `SRT_FETCH_TIMEOUT` — HTTP timeout (seconds) for fetching SRT text (default `5.0`)

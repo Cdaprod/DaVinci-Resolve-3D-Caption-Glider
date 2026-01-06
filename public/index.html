@@ -746,6 +746,50 @@
   const cfg = structuredClone(DEFAULT_CFG);
 
   // -------------------------
+  // Basic UI bootstrap (works even if 3D deps fail to load)
+  // -------------------------
+  const ui = document.getElementById('ui');
+  const uiToggle = document.getElementById('uiToggle');
+  const statusEl = document.getElementById('status');
+
+  function setStatus(msg) {
+    if (statusEl) statusEl.textContent = msg;
+  }
+
+  function setUiCollapsed(isCollapsed) {
+    if (!ui) return;
+    ui.classList.toggle('collapsed', !!isCollapsed);
+    if (uiToggle) {
+      uiToggle.textContent = isCollapsed ? '◀' : '▶';
+      uiToggle.title = isCollapsed ? 'Expand' : 'Collapse';
+    }
+    try { localStorage.setItem('captioner_ui_collapsed', isCollapsed ? '1' : '0'); } catch (_) {}
+  }
+
+  uiToggle?.addEventListener('click', () => {
+    if (!ui) return;
+    setUiCollapsed(!ui.classList.contains('collapsed'));
+  });
+
+  // restore collapsed state (default collapsed)
+  try {
+    const v = localStorage.getItem('captioner_ui_collapsed');
+    setUiCollapsed(v === null ? true : (v === '1'));
+  } catch (_) {
+    setUiCollapsed(true);
+  }
+
+  const missingDeps = [];
+  if (!window.THREE) missingDeps.push('three.min.js');
+  if (window.THREE && !window.THREE.FontLoader) missingDeps.push('FontLoader.js');
+  if (window.THREE && !window.THREE.TTFLoader) missingDeps.push('TTFLoader.js');
+  if (window.THREE && !window.THREE.TextGeometry) missingDeps.push('TextGeometry.js');
+
+  if (missingDeps.length) {
+    setStatus(`Missing 3D dependencies: ${missingDeps.join(', ')}.
+Ensure this device can reach https://cdn.jsdelivr.net or host those files under /public.`);
+  } else {
+  // -------------------------
   // THREE SETUP
   // -------------------------
   const canvas   = document.getElementById('c');
@@ -891,10 +935,6 @@
   // -------------------------
   // UI refs
   // -------------------------
-  const ui = document.getElementById('ui');
-  const uiToggle = document.getElementById('uiToggle');
-
-  const statusEl = document.getElementById('status');
   const projectSelect = document.getElementById('projectSelect');
   const videoSelect = document.getElementById('videoSelect');
   const btnGenerateCaptions = document.getElementById('btnGenerateCaptions');
@@ -942,32 +982,9 @@
   const cfgGrid = document.getElementById('cfgGrid');
   const cfgResetBtn = document.getElementById('cfgReset');
   const cfgApplyBtn = document.getElementById('cfgApply');
-
-  function setStatus(msg) { statusEl.textContent = msg; }
-
   btnStop.style.display = 'none';
   btnRecord.disabled = false;
   btnStop.disabled = true;
-
-  // Collapsible main UI panel
-  function setUiCollapsed(isCollapsed) {
-    ui.classList.toggle('collapsed', !!isCollapsed);
-    uiToggle.textContent = isCollapsed ? '◀' : '▶';
-    uiToggle.title = isCollapsed ? 'Expand' : 'Collapse';
-    try { localStorage.setItem('captioner_ui_collapsed', isCollapsed ? '1' : '0'); } catch (_) {}
-  }
-
-  uiToggle.addEventListener('click', () => {
-    setUiCollapsed(!ui.classList.contains('collapsed'));
-  });
-
-  // restore collapsed state (default collapsed)
-  try {
-    const v = localStorage.getItem('captioner_ui_collapsed');
-    setUiCollapsed(v === null ? true : (v === '1'));
-  } catch (_) {
-    setUiCollapsed(true);
-  }
 
   wplEl.addEventListener('input', () => {
     wplValEl.textContent = String(wplEl.value);
@@ -3456,6 +3473,7 @@ ${String(err)}`);
     camera.updateProjectionMatrix();
     render();
   });
+  }
 </script>
 </body>
 </html>

@@ -509,8 +509,8 @@
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/FontLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/TTFLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/geometries/TextGeometry.js"></script>
-<script src="./animation-helpers.js"></script>
-<script src="./lighting-rig.js"></script>
+<script src="/public/animation-helpers.js"></script>
+<script src="/public/lighting-rig.js"></script>
 
 <script>
   // -------------------------
@@ -583,7 +583,7 @@
   });
 
   const STORAGE_KEY = 'captioner_state_v1';
-  const STORAGE_SEED_URLS = ['./localStorage.json', './alternate-test-versions/localStorage.json'];
+  const STORAGE_SEED_URLS = ['/public/localStorage.json', '/public/alternate-test-versions/localStorage.json'];
   const FALLBACK_DEMO_LINES = [
     'Cinematic scripting starts in default (no marker required)',
     '[BREAK]',

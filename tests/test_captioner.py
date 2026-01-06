@@ -113,6 +113,9 @@ def test_root_serves_ui(tmp_path, monkeypatch):
     assert resp.status_code == 200
     assert "<html" in resp.text.lower()
     assert "captioner" in resp.text.lower()
+    assert "/public/animation-helpers.js" in resp.text
+    assert "/public/lighting-rig.js" in resp.text
+    assert "/public/localStorage.json" in resp.text
 
 
 def test_derive_srt_url_captions_dir(tmp_path, monkeypatch):

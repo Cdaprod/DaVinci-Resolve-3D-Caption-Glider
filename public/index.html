@@ -802,6 +802,7 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
 
   const camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.05, 200);
   scene.add(camera);
+  const BASE_FOV = camera.fov;
 
   const lightingRig = (window.CaptionLighting || {}).applyLightingRig?.({
     THREE,
@@ -1635,12 +1636,16 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
     const keepStacked = cfg.keepPreviousLinesVisible && cfg.stackLines;
     const movingForward = index > timelineState.activeIndex;
 
-    if (!keepStacked || !movingForward) {
+    if (!keepStacked || (!movingForward && index >= 0)) {
       clearAllLinesFromScene();
       stackedGroups.length = 0;
     }
 
     timelineState.activeIndex = index;
+    if (keepStacked && index < 0) {
+      render();
+      return;
+    }
     if (index < 0) return;
 
     if (keepStacked) {
@@ -1721,6 +1726,7 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
         lookAtX: camera.position.x,
         lookAtY: camera.position.y,
         camDistance: baseCamDistance,
+        camFov: camera.fov,
         targetX: camera.position.x,
         targetY: camera.position.y,
       };
@@ -1751,14 +1757,17 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
     state.camX = damp(state.camX, state.targetX, camLambda, dt);
     state.camY = damp(state.camY, state.targetY, camLambda, dt);
 
-    const desiredDistance = frameCameraDistance(baseCamDistance, activeIdx, widths, bounds);
-    state.camDistance = damp(state.camDistance, desiredDistance, Math.max(2.5, followLambda * 0.55), dt);
+    const camSettings = frameCameraSettings(baseCamDistance, activeIdx, widths, bounds);
+    state.camDistance = damp(state.camDistance, camSettings.distance, Math.max(2.5, followLambda * 0.55), dt);
+    state.camFov = damp(state.camFov, camSettings.fov, Math.max(2.5, followLambda * 0.45), dt);
 
     const lookTargetLambda = Math.max(0.08, lookLambda * lookScale * 0.9);
     state.lookAtX = damp(state.lookAtX, state.targetX, lookTargetLambda, dt);
     state.lookAtY = damp(state.lookAtY, state.targetY, lookTargetLambda, dt);
 
     camera.position.set(state.camX, state.camY, state.camDistance);
+    camera.fov = state.camFov;
+    camera.updateProjectionMatrix();
     camera.lookAt(state.lookAtX, state.lookAtY, target.z);
     renderer.render(scene, camera);
   }
@@ -2533,8 +2542,12 @@ ${String(err)}`);
         return Math.max(baseDistance, needed);
       };
 
+  function computeLineSpan(bounds) {
+    return Math.max(0, (bounds?.maxX ?? 0) - (bounds?.minX ?? 0));
+  }
+
   function computeFocusSpan(activeIdx, widths = [], bounds) {
-    const span = Math.max(0, (bounds?.maxX ?? 0) - (bounds?.minX ?? 0));
+    const span = computeLineSpan(bounds);
     if (!Array.isArray(widths) || widths.length === 0) return Math.max(0.6, span * 0.5);
 
     const safeIdx = Math.max(0, Math.min(typeof activeIdx === 'number' && activeIdx >= 0 ? activeIdx : Math.floor(widths.length / 2), widths.length - 1));
@@ -2549,10 +2562,22 @@ ${String(err)}`);
     return Math.max(trio, avg * 2.4, maxW * 1.25, span * 0.5, 0.6);
   }
 
-  function frameCameraDistance(baseDistance, activeIdx, widths, bounds) {
+  function computeDesiredFov(baseFov, span) {
+    const shrinkPerUnit = 6;
+    const minFov = 26;
+    const fullSpan = Math.max(0, span);
+    const desired = baseFov - (fullSpan * shrinkPerUnit);
+    return Math.max(minFov, Math.min(baseFov, desired));
+  }
+
+  function frameCameraSettings(baseDistance, activeIdx, widths, bounds) {
+    const lineSpan = computeLineSpan(bounds);
     const focusSpan = computeFocusSpan(activeIdx, widths, bounds);
+    const span = Math.max(lineSpan, focusSpan);
     const padding = Math.max(0.05, cfg.trackLeadPx + cfg.endOverhangPx * 0.5);
-    return requiredDistanceForSpan(focusSpan, camera.aspect, camera.fov, baseDistance, padding);
+    const desiredFov = computeDesiredFov(BASE_FOV, span);
+    const distance = requiredDistanceForSpan(span, camera.aspect, desiredFov, baseDistance, padding);
+    return { distance, fov: desiredFov };
   }
 
   function easeOutEndU(u) {
@@ -2614,6 +2639,8 @@ ${String(err)}`);
     const lookLambda   = cfg.lookAtLambda * (lineProfile?.lookAtMult ?? 1);
     const baseCamDistance  = cfg.cameraDistance + (lineProfile?.cameraDistanceOffset ?? 0);
     let camDistance = baseCamDistance;
+    let camFov = camera.fov;
+    let camFov = camera.fov;
     let lastNow = performance.now();
     let targetX = camera.position.x;
     let targetY = camera.position.y;
@@ -2677,14 +2704,17 @@ ${String(err)}`);
       camX = damp(camX, targetX, camLambda, dt);
       camY = damp(camY, targetY, camLambda, dt);
 
-      const desiredDistance = frameCameraDistance(baseCamDistance, activeIdx, widths, bounds);
-      camDistance = damp(camDistance, desiredDistance, Math.max(2.5, followLambda * 0.55), dt);
+      const camSettings = frameCameraSettings(baseCamDistance, activeIdx, widths, bounds);
+      camDistance = damp(camDistance, camSettings.distance, Math.max(2.5, followLambda * 0.55), dt);
+      camFov = damp(camFov, camSettings.fov, Math.max(2.5, followLambda * 0.45), dt);
 
       const lookTargetLambda = Math.max(0.08, lookLambda * lookScale * 0.9);
       lookAtX = damp(lookAtX, targetX, lookTargetLambda, dt);
       lookAtY = damp(lookAtY, targetY, lookTargetLambda, dt);
 
       camera.position.set(camX, camY, camDistance);
+      camera.fov = camFov;
+      camera.updateProjectionMatrix();
       camera.lookAt(lookAtX, lookAtY, target.z);
 
       renderer.render(scene, camera);
@@ -2812,14 +2842,17 @@ ${String(err)}`);
       camX = damp(camX, targetX, camLambda, dt);
       camY = damp(camY, targetY, camLambda, dt);
 
-      const desiredDistance = frameCameraDistance(baseCamDistance, activeIdx, widths, bounds);
-      camDistance = damp(camDistance, desiredDistance, Math.max(2.5, followLambda * 0.55), dt);
+      const camSettings = frameCameraSettings(baseCamDistance, activeIdx, widths, bounds);
+      camDistance = damp(camDistance, camSettings.distance, Math.max(2.5, followLambda * 0.55), dt);
+      camFov = damp(camFov, camSettings.fov, Math.max(2.5, followLambda * 0.45), dt);
 
       const lookTargetLambda = Math.max(0.08, lookLambda * lookScale * 0.9);
       lookAtX = damp(lookAtX, targetX, lookTargetLambda, dt);
       lookAtY = damp(lookAtY, targetY, lookTargetLambda, dt);
 
       camera.position.set(camX, camY, camDistance);
+      camera.fov = camFov;
+      camera.updateProjectionMatrix();
       camera.lookAt(lookAtX, lookAtY, target.z);
 
       renderer.render(scene, camera);

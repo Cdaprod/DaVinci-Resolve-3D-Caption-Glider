@@ -1766,8 +1766,10 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
     state.lookAtY = damp(state.lookAtY, state.targetY, lookTargetLambda, dt);
 
     camera.position.set(state.camX, state.camY, state.camDistance);
-    camera.fov = state.camFov;
-    camera.updateProjectionMatrix();
+    if (Math.abs(state.camFov - camera.fov) > 1e-3) {
+      camera.fov = state.camFov;
+      camera.updateProjectionMatrix();
+    }
     camera.lookAt(state.lookAtX, state.lookAtY, target.z);
     renderer.render(scene, camera);
   }
@@ -2713,8 +2715,10 @@ ${String(err)}`);
       lookAtY = damp(lookAtY, targetY, lookTargetLambda, dt);
 
       camera.position.set(camX, camY, camDistance);
-      camera.fov = camFov;
-      camera.updateProjectionMatrix();
+      if (Math.abs(camFov - camera.fov) > 1e-3) {
+        camera.fov = camFov;
+        camera.updateProjectionMatrix();
+      }
       camera.lookAt(lookAtX, lookAtY, target.z);
 
       renderer.render(scene, camera);
@@ -2851,8 +2855,10 @@ ${String(err)}`);
       lookAtY = damp(lookAtY, targetY, lookTargetLambda, dt);
 
       camera.position.set(camX, camY, camDistance);
-      camera.fov = camFov;
-      camera.updateProjectionMatrix();
+      if (Math.abs(camFov - camera.fov) > 1e-3) {
+        camera.fov = camFov;
+        camera.updateProjectionMatrix();
+      }
       camera.lookAt(lookAtX, lookAtY, target.z);
 
       renderer.render(scene, camera);

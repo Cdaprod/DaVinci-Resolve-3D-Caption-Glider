@@ -118,6 +118,7 @@ def test_root_serves_ui(tmp_path, monkeypatch):
     assert "/public/localStorage.json" in resp.text
     assert "computeDesiredFov" in resp.text
     assert "pendingRemovalGroup" in resp.text
+    assert "holdTime" in resp.text
 
 
 def test_root_static_aliases(tmp_path, monkeypatch):

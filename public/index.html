@@ -1792,6 +1792,15 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
     const activeIndex = getActiveTimelineIndex(currentSec, timelineLines);
     ensureActiveTimelineLine(activeIndex);
     if (activeIndex < 0) {
+      if (timelineState.activeIndex >= 0) {
+        const lastLine = timelineLines[timelineState.activeIndex];
+        if (lastLine) {
+          const holdTime = Number(lastLine.endTime ?? 0);
+          renderLineAtTime(lastLine, holdTime, now);
+          setActiveCaptionPreview(lastLine.text || '');
+          return;
+        }
+      }
       setActiveCaptionPreview('');
       render();
       return;

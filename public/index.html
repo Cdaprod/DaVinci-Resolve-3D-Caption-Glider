@@ -6,7 +6,10 @@
   <title>3D Glide-Over-Line Captioner (Resolve Transcript Sync)</title>
   <style>
     :root {
-      --ui-width: clamp(280px, 30vw, 340px);
+      --ui-width: clamp(260px, 30vw, 340px);
+      --ui-padding: 12px;
+      --ui-gap: 10px;
+      --ui-radius: 12px;
     }
 
     html, body { margin:0; padding:0; width:100%; height:100%; background:#000; overflow:hidden; overscroll-behavior: none; }
@@ -19,8 +22,8 @@
       z-index: 9999;
       background: rgba(0,0,0,0.78);
       border: 1px solid rgba(255,255,255,0.12);
-      padding: 12px;
-      border-radius: 12px;
+      padding: var(--ui-padding);
+      border-radius: var(--ui-radius);
       color: #fff;
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       font-size: 12px;
@@ -47,7 +50,7 @@
       align-items: center;
       justify-content: space-between;
       gap: 10px;
-      margin-bottom: 6px;
+      margin-bottom: var(--ui-gap);
     }
 
     #uiTitle {
@@ -61,7 +64,7 @@
 
     #uiToggle {
       width: 38px;
-      height: 28px;
+      height: 26px;
       border-radius: 10px;
       border: 1px solid rgba(255,255,255,0.14);
       background: rgba(255,255,255,0.08);
@@ -89,13 +92,14 @@
 
     #ui button {
       width: 100%;
-      padding: 10px 10px;
+      padding: 9px 10px;
       margin: 6px 0;
       border: none;
       border-radius: 10px;
       cursor: pointer;
       font-weight: 800;
       letter-spacing: 0.2px;
+      font-size: 12px;
     }
 
     #btnLoad   { background: #00ccff; color:#001018; }
@@ -104,7 +108,7 @@
     #btnRecord { background: #ff3b30; color:#fff; }
     #btnStop   { background: #ff9500; color:#111; display:none; }
 
-    #ui label { display:block; margin-top:10px; opacity: 0.95; }
+    #ui label { display:block; margin-top:8px; opacity: 0.95; }
     #ui input[type="range"] { width: 100%; margin-top: 6px; }
     #ui input[type="checkbox"] { transform: translateY(1px); }
     #ui .row { display:flex; gap:8px; }
@@ -130,6 +134,9 @@
       padding-bottom: calc(24px + env(safe-area-inset-bottom));
       -webkit-overflow-scrolling: touch;
       touch-action: pan-y;
+      display: flex;
+      flex-direction: column;
+      gap: var(--ui-gap);
     }
 
     #uiBody::-webkit-scrollbar { width: 8px; }
@@ -138,16 +145,16 @@
 
     /* Config panel */
     details.cfgbox {
-      margin-top: 10px;
+      margin-top: 0;
       border: 1px solid rgba(255,255,255,0.10);
-      border-radius: 12px;
+      border-radius: var(--ui-radius);
       overflow: hidden;
       background: rgba(255,255,255,0.03);
     }
     details.cfgbox > summary {
       list-style: none;
       cursor: pointer;
-      padding: 10px 10px;
+      padding: 9px 10px;
       font-weight: 850;
       display: flex;
       align-items: center;
@@ -188,6 +195,72 @@
       opacity: 0.65;
       font-weight: 500;
       line-height: 1.1;
+    }
+
+    #ui input[type="text"],
+    #ui input[type="number"],
+    #ui select,
+    #ui textarea {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 6px 8px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(0,0,0,0.28);
+      color: inherit;
+      font-size: 12px;
+    }
+
+    #ui .panel {
+      margin-top: 0;
+      padding: 10px;
+      border-radius: var(--ui-radius);
+    }
+
+    #ui .panel h4 {
+      margin: 0 0 6px;
+      font-size: 12px;
+      letter-spacing: 0.2px;
+    }
+
+    #ui .row { margin-top: 6px; }
+    #ui .row.tight { margin-top: 8px; }
+
+    #status,
+    #hint,
+    #mini {
+      margin-top: 6px;
+    }
+
+    @media (max-width: 520px) {
+      #ui {
+        top: 8px;
+        right: 8px;
+        left: 8px;
+        width: auto;
+        max-height: calc(100vh - 16px);
+        font-size: 11px;
+      }
+      #ui button {
+        padding: 8px 9px;
+        font-size: 11px;
+      }
+      #uiToggle {
+        width: 34px;
+        height: 24px;
+      }
+      #ui.collapsed {
+        transform: translateX(calc(100vw - 64px));
+      }
+      .cfgrow {
+        grid-template-columns: 1fr;
+      }
+      #ui input[type="text"],
+      #ui input[type="number"],
+      #ui select,
+      #ui textarea {
+        font-size: 11px;
+      }
     }
     .cfgrow input[type="number"],
     .cfgrow input[type="text"] {
@@ -1641,37 +1714,42 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
     if (index === timelineState.activeIndex) return;
 
     const keepStacked = cfg.keepPreviousLinesVisible && cfg.stackLines;
-    const movingForward = index > timelineState.activeIndex;
+    timelineState.activeIndex = index;
 
-    if (!keepStacked || (!movingForward && index >= 0)) {
+    if (!keepStacked) {
       clearAllLinesFromScene();
       stackedGroups.length = 0;
+      if (index < 0) return;
+      const lineObj = timelineLines[index];
+      if (!lineObj) return;
+      lineObj.group.position.y = 0;
+      resetLineRevealState(lineObj);
+      scene.add(lineObj.group);
+      return;
     }
 
-    timelineState.activeIndex = index;
-    if (keepStacked && index < 0) {
+    clearAllLinesFromScene();
+    stackedGroups.length = 0;
+
+    if (index < 0) {
       render();
       return;
     }
-    if (index < 0) return;
 
-    if (keepStacked) {
-      for (let i = 0; i < index; i++) {
-        const prev = timelineLines[i];
-        if (!prev || stackedGroups.includes(prev.group)) continue;
-        prev.group.position.y = 0;
-        finalizeLineVisibility(prev);
-        stackedGroups.push(prev.group);
-      }
-      enforceStackLimit();
-      reflowStackedGroups();
+    const max = Math.max(1, Number(cfg.stackMaxLines || 1));
+    const startIdx = Math.max(0, index - max + 1);
+
+    for (let i = startIdx; i <= index; i++) {
+      const lineObj = timelineLines[i];
+      if (!lineObj) continue;
+      lineObj.group.position.y = 0;
+      if (i < index) finalizeLineVisibility(lineObj);
+      else resetLineRevealState(lineObj);
+      scene.add(lineObj.group);
+      stackedGroups.push(lineObj.group);
     }
 
-    const lineObj = timelineLines[index];
-    if (!lineObj) return;
-    lineObj.group.position.y = 0;
-    resetLineRevealState(lineObj);
-    scene.add(lineObj.group);
+    reflowStackedGroups();
   }
 
   function renderLineAtTime(lineObj, currentTimeSec, now) {

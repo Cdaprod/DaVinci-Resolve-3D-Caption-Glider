@@ -113,6 +113,21 @@ def test_root_serves_ui(tmp_path, monkeypatch):
     assert resp.status_code == 200
     assert "<html" in resp.text.lower()
     assert "captioner" in resp.text.lower()
+    assert "animation-helpers.js" in resp.text
+    assert "lighting-rig.js" in resp.text
+    assert "/public/localStorage.json" in resp.text
+    assert "computeDesiredFov" in resp.text
+
+
+def test_root_static_aliases(tmp_path, monkeypatch):
+    client, mod = build_client(tmp_path, monkeypatch)
+    helpers = client.get("/animation-helpers.js")
+    assert helpers.status_code == 200
+    assert "AnimationHelpers" in helpers.text
+
+    rig = client.get("/lighting-rig.js")
+    assert rig.status_code == 200
+    assert "CaptionLighting" in rig.text
 
 
 def test_derive_srt_url_captions_dir(tmp_path, monkeypatch):

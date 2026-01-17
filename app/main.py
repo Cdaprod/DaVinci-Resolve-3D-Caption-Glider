@@ -422,6 +422,34 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="UI not found")
         return FileResponse(target)
 
+    def resolve_public_asset(filename: str) -> Path:
+        target = (PUBLIC_DIR / filename).resolve()
+        if PUBLIC_DIR not in target.parents and target != PUBLIC_DIR:
+            raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="Invalid asset path")
+        if not target.exists():
+            raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Asset not found")
+        return target
+
+    @app.get("/animation-helpers.js")
+    async def animation_helpers() -> FileResponse:
+        """Serve animation helper script at the root path.
+
+        Example:
+            curl "http://localhost:8791/animation-helpers.js"
+        """
+
+        return FileResponse(resolve_public_asset("animation-helpers.js"), media_type="application/javascript")
+
+    @app.get("/lighting-rig.js")
+    async def lighting_rig() -> FileResponse:
+        """Serve lighting rig script at the root path.
+
+        Example:
+            curl "http://localhost:8791/lighting-rig.js"
+        """
+
+        return FileResponse(resolve_public_asset("lighting-rig.js"), media_type="application/javascript")
+
     @app.get("/health")
     async def health() -> Dict[str, str]:
         return {"status": "ok"}

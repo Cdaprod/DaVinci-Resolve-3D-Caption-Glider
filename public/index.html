@@ -37,7 +37,7 @@
 
     /* collapsed state: tuck it mostly offscreen but keep a tab */
     #ui.collapsed {
-      transform: translateX(calc(var(--ui-width) - 68px));
+      transform: translateX(calc(min(var(--ui-width), 100vw) - 68px));
       opacity: 0.92;
     }
 
@@ -311,7 +311,7 @@
     @media (max-width: 900px) {
       :root { --ui-width: clamp(280px, 44vw, 360px); }
       #ui { right: 8px; top: 8px; max-height: calc(100vh - 16px); }
-      #ui.collapsed { transform: translateX(calc(var(--ui-width) - 64px)); }
+      #ui.collapsed { transform: translateX(calc(min(var(--ui-width), 100vw) - 64px)); }
     }
 
     @media (max-width: 720px), (orientation: portrait) {
@@ -583,7 +583,12 @@
   });
 
   const STORAGE_KEY = 'captioner_state_v1';
-  const STORAGE_SEED_URLS = ['./localStorage.json', './alternate-test-versions/localStorage.json'];
+  const STORAGE_SEED_URLS = [
+    './localStorage.json',
+    '/public/localStorage.json',
+    './alternate-test-versions/localStorage.json',
+    '/public/alternate-test-versions/localStorage.json'
+  ];
   const FALLBACK_DEMO_LINES = [
     'Cinematic scripting starts in default (no marker required)',
     '[BREAK]',
@@ -746,6 +751,52 @@
   const cfg = structuredClone(DEFAULT_CFG);
 
   // -------------------------
+  // Basic UI bootstrap (works even if 3D deps fail to load)
+  // -------------------------
+  const ui = document.getElementById('ui');
+  const uiToggle = document.getElementById('uiToggle');
+  const statusEl = document.getElementById('status');
+
+  function setStatus(msg) {
+    if (statusEl) statusEl.textContent = msg;
+  }
+
+  function setUiCollapsed(isCollapsed) {
+    if (!ui) return;
+    ui.classList.toggle('collapsed', !!isCollapsed);
+    if (uiToggle) {
+      uiToggle.textContent = isCollapsed ? '◀' : '▶';
+      uiToggle.title = isCollapsed ? 'Expand' : 'Collapse';
+    }
+    try { localStorage.setItem('captioner_ui_collapsed', isCollapsed ? '1' : '0'); } catch (_) {}
+  }
+
+  uiToggle?.addEventListener('click', () => {
+    if (!ui) return;
+    setUiCollapsed(!ui.classList.contains('collapsed'));
+  });
+
+  // restore collapsed state (default collapsed)
+  try {
+    const v = localStorage.getItem('captioner_ui_collapsed');
+    setUiCollapsed(v === null ? true : (v === '1'));
+  } catch (_) {
+    setUiCollapsed(true);
+  }
+
+  const missingDeps = [];
+  if (!window.THREE) missingDeps.push('three.min.js');
+  if (window.THREE && !window.THREE.FontLoader) missingDeps.push('FontLoader.js');
+  if (window.THREE && !window.THREE.TTFLoader) missingDeps.push('TTFLoader.js');
+  if (window.THREE && !window.THREE.TextGeometry) missingDeps.push('TextGeometry.js');
+  if (!window.AnimationHelpers) missingDeps.push('animation-helpers.js');
+  if (!window.CaptionLighting) missingDeps.push('lighting-rig.js');
+
+  if (missingDeps.length) {
+    setStatus(`Missing 3D dependencies: ${missingDeps.join(', ')}.
+Ensure this device can reach https://cdn.jsdelivr.net or host those files under /public.`);
+  } else {
+  // -------------------------
   // THREE SETUP
   // -------------------------
   const canvas   = document.getElementById('c');
@@ -758,6 +809,7 @@
 
   const camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.05, 200);
   scene.add(camera);
+  const BASE_FOV = camera.fov;
 
   const lightingRig = (window.CaptionLighting || {}).applyLightingRig?.({
     THREE,
@@ -891,10 +943,6 @@
   // -------------------------
   // UI refs
   // -------------------------
-  const ui = document.getElementById('ui');
-  const uiToggle = document.getElementById('uiToggle');
-
-  const statusEl = document.getElementById('status');
   const projectSelect = document.getElementById('projectSelect');
   const videoSelect = document.getElementById('videoSelect');
   const btnGenerateCaptions = document.getElementById('btnGenerateCaptions');
@@ -942,32 +990,9 @@
   const cfgGrid = document.getElementById('cfgGrid');
   const cfgResetBtn = document.getElementById('cfgReset');
   const cfgApplyBtn = document.getElementById('cfgApply');
-
-  function setStatus(msg) { statusEl.textContent = msg; }
-
   btnStop.style.display = 'none';
   btnRecord.disabled = false;
   btnStop.disabled = true;
-
-  // Collapsible main UI panel
-  function setUiCollapsed(isCollapsed) {
-    ui.classList.toggle('collapsed', !!isCollapsed);
-    uiToggle.textContent = isCollapsed ? '◀' : '▶';
-    uiToggle.title = isCollapsed ? 'Expand' : 'Collapse';
-    try { localStorage.setItem('captioner_ui_collapsed', isCollapsed ? '1' : '0'); } catch (_) {}
-  }
-
-  uiToggle.addEventListener('click', () => {
-    setUiCollapsed(!ui.classList.contains('collapsed'));
-  });
-
-  // restore collapsed state (default collapsed)
-  try {
-    const v = localStorage.getItem('captioner_ui_collapsed');
-    setUiCollapsed(v === null ? true : (v === '1'));
-  } catch (_) {
-    setUiCollapsed(true);
-  }
 
   wplEl.addEventListener('input', () => {
     wplValEl.textContent = String(wplEl.value);
@@ -1618,12 +1643,16 @@
     const keepStacked = cfg.keepPreviousLinesVisible && cfg.stackLines;
     const movingForward = index > timelineState.activeIndex;
 
-    if (!keepStacked || !movingForward) {
+    if (!keepStacked || (!movingForward && index >= 0)) {
       clearAllLinesFromScene();
       stackedGroups.length = 0;
     }
 
     timelineState.activeIndex = index;
+    if (keepStacked && index < 0) {
+      render();
+      return;
+    }
     if (index < 0) return;
 
     if (keepStacked) {
@@ -1704,6 +1733,7 @@
         lookAtX: camera.position.x,
         lookAtY: camera.position.y,
         camDistance: baseCamDistance,
+        camFov: camera.fov,
         targetX: camera.position.x,
         targetY: camera.position.y,
       };
@@ -1734,14 +1764,19 @@
     state.camX = damp(state.camX, state.targetX, camLambda, dt);
     state.camY = damp(state.camY, state.targetY, camLambda, dt);
 
-    const desiredDistance = frameCameraDistance(baseCamDistance, activeIdx, widths, bounds);
-    state.camDistance = damp(state.camDistance, desiredDistance, Math.max(2.5, followLambda * 0.55), dt);
+    const camSettings = frameCameraSettings(baseCamDistance, activeIdx, widths, bounds);
+    state.camDistance = damp(state.camDistance, camSettings.distance, Math.max(2.5, followLambda * 0.55), dt);
+    state.camFov = damp(state.camFov, camSettings.fov, Math.max(2.5, followLambda * 0.45), dt);
 
     const lookTargetLambda = Math.max(0.08, lookLambda * lookScale * 0.9);
     state.lookAtX = damp(state.lookAtX, state.targetX, lookTargetLambda, dt);
     state.lookAtY = damp(state.lookAtY, state.targetY, lookTargetLambda, dt);
 
     camera.position.set(state.camX, state.camY, state.camDistance);
+    if (Math.abs(state.camFov - camera.fov) > 1e-3) {
+      camera.fov = state.camFov;
+      camera.updateProjectionMatrix();
+    }
     camera.lookAt(state.lookAtX, state.lookAtY, target.z);
     renderer.render(scene, camera);
   }
@@ -1757,6 +1792,15 @@
     const activeIndex = getActiveTimelineIndex(currentSec, timelineLines);
     ensureActiveTimelineLine(activeIndex);
     if (activeIndex < 0) {
+      if (timelineState.activeIndex >= 0) {
+        const lastLine = timelineLines[timelineState.activeIndex];
+        if (lastLine) {
+          const holdTime = Number(lastLine.endTime ?? 0);
+          renderLineAtTime(lastLine, holdTime, now);
+          setActiveCaptionPreview(lastLine.text || '');
+          return;
+        }
+      }
       setActiveCaptionPreview('');
       render();
       return;
@@ -2516,8 +2560,12 @@ ${String(err)}`);
         return Math.max(baseDistance, needed);
       };
 
+  function computeLineSpan(bounds) {
+    return Math.max(0, (bounds?.maxX ?? 0) - (bounds?.minX ?? 0));
+  }
+
   function computeFocusSpan(activeIdx, widths = [], bounds) {
-    const span = Math.max(0, (bounds?.maxX ?? 0) - (bounds?.minX ?? 0));
+    const span = computeLineSpan(bounds);
     if (!Array.isArray(widths) || widths.length === 0) return Math.max(0.6, span * 0.5);
 
     const safeIdx = Math.max(0, Math.min(typeof activeIdx === 'number' && activeIdx >= 0 ? activeIdx : Math.floor(widths.length / 2), widths.length - 1));
@@ -2532,10 +2580,22 @@ ${String(err)}`);
     return Math.max(trio, avg * 2.4, maxW * 1.25, span * 0.5, 0.6);
   }
 
-  function frameCameraDistance(baseDistance, activeIdx, widths, bounds) {
+  function computeDesiredFov(baseFov, span) {
+    const shrinkPerUnit = 6;
+    const minFov = 26;
+    const fullSpan = Math.max(0, span);
+    const desired = baseFov - (fullSpan * shrinkPerUnit);
+    return Math.max(minFov, Math.min(baseFov, desired));
+  }
+
+  function frameCameraSettings(baseDistance, activeIdx, widths, bounds) {
+    const lineSpan = computeLineSpan(bounds);
     const focusSpan = computeFocusSpan(activeIdx, widths, bounds);
+    const span = Math.max(lineSpan, focusSpan);
     const padding = Math.max(0.05, cfg.trackLeadPx + cfg.endOverhangPx * 0.5);
-    return requiredDistanceForSpan(focusSpan, camera.aspect, camera.fov, baseDistance, padding);
+    const desiredFov = computeDesiredFov(BASE_FOV, span);
+    const distance = requiredDistanceForSpan(span, camera.aspect, desiredFov, baseDistance, padding);
+    return { distance, fov: desiredFov };
   }
 
   function easeOutEndU(u) {
@@ -2597,6 +2657,7 @@ ${String(err)}`);
     const lookLambda   = cfg.lookAtLambda * (lineProfile?.lookAtMult ?? 1);
     const baseCamDistance  = cfg.cameraDistance + (lineProfile?.cameraDistanceOffset ?? 0);
     let camDistance = baseCamDistance;
+    let camFov = camera.fov;
     let lastNow = performance.now();
     let targetX = camera.position.x;
     let targetY = camera.position.y;
@@ -2660,14 +2721,19 @@ ${String(err)}`);
       camX = damp(camX, targetX, camLambda, dt);
       camY = damp(camY, targetY, camLambda, dt);
 
-      const desiredDistance = frameCameraDistance(baseCamDistance, activeIdx, widths, bounds);
-      camDistance = damp(camDistance, desiredDistance, Math.max(2.5, followLambda * 0.55), dt);
+      const camSettings = frameCameraSettings(baseCamDistance, activeIdx, widths, bounds);
+      camDistance = damp(camDistance, camSettings.distance, Math.max(2.5, followLambda * 0.55), dt);
+      camFov = damp(camFov, camSettings.fov, Math.max(2.5, followLambda * 0.45), dt);
 
       const lookTargetLambda = Math.max(0.08, lookLambda * lookScale * 0.9);
       lookAtX = damp(lookAtX, targetX, lookTargetLambda, dt);
       lookAtY = damp(lookAtY, targetY, lookTargetLambda, dt);
 
       camera.position.set(camX, camY, camDistance);
+      if (Math.abs(camFov - camera.fov) > 1e-3) {
+        camera.fov = camFov;
+        camera.updateProjectionMatrix();
+      }
       camera.lookAt(lookAtX, lookAtY, target.z);
 
       renderer.render(scene, camera);
@@ -2795,14 +2861,19 @@ ${String(err)}`);
       camX = damp(camX, targetX, camLambda, dt);
       camY = damp(camY, targetY, camLambda, dt);
 
-      const desiredDistance = frameCameraDistance(baseCamDistance, activeIdx, widths, bounds);
-      camDistance = damp(camDistance, desiredDistance, Math.max(2.5, followLambda * 0.55), dt);
+      const camSettings = frameCameraSettings(baseCamDistance, activeIdx, widths, bounds);
+      camDistance = damp(camDistance, camSettings.distance, Math.max(2.5, followLambda * 0.55), dt);
+      camFov = damp(camFov, camSettings.fov, Math.max(2.5, followLambda * 0.45), dt);
 
       const lookTargetLambda = Math.max(0.08, lookLambda * lookScale * 0.9);
       lookAtX = damp(lookAtX, targetX, lookTargetLambda, dt);
       lookAtY = damp(lookAtY, targetY, lookTargetLambda, dt);
 
       camera.position.set(camX, camY, camDistance);
+      if (Math.abs(camFov - camera.fov) > 1e-3) {
+        camera.fov = camFov;
+        camera.updateProjectionMatrix();
+      }
       camera.lookAt(lookAtX, lookAtY, target.z);
 
       renderer.render(scene, camera);
@@ -2830,6 +2901,7 @@ ${String(err)}`);
   // Sequencer + stacking
   // -------------------------
   let isPlaying = false;
+  let pendingRemovalGroup = null;
 
   function clearAllLinesFromScene() {
     for (const obj of lineObjs) {
@@ -2895,6 +2967,10 @@ ${String(err)}`);
     const current = lineObjs[lineIdx];
 
     const startLine = () => {
+      if (pendingRemovalGroup && pendingRemovalGroup !== current.group) {
+        scene.remove(pendingRemovalGroup);
+        pendingRemovalGroup = null;
+      }
       // Reset mesh visibility/opacities in case of prior runs
       if (Array.isArray(current.meshes)) {
         for (const m of current.meshes) {
@@ -2918,7 +2994,14 @@ ${String(err)}`);
 
       const hasTiming = (typeof current.startTime === 'number' && typeof current.endTime === 'number');
       const done = () => {
-        if (!cfg.keepPreviousLinesVisible || !cfg.stackLines) scene.remove(current.group);
+        if (!cfg.keepPreviousLinesVisible || !cfg.stackLines) {
+          if (lineIdx + 1 < lineObjs.length) {
+            pendingRemovalGroup = current.group;
+          } else {
+            scene.remove(current.group);
+            pendingRemovalGroup = null;
+          }
+        }
         runSequence(lineIdx + 1);
       };
 
@@ -3456,6 +3539,7 @@ ${String(err)}`);
     camera.updateProjectionMatrix();
     render();
   });
+  }
 </script>
 </body>
 </html>

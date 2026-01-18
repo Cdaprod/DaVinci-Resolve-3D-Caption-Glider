@@ -120,6 +120,7 @@ def test_root_serves_ui(tmp_path, monkeypatch):
     assert "pendingRemovalGroup" in resp.text
     assert "getActiveTimelineIndex" in resp.text
     assert "startReveal(current.meshes[0]" in resp.text
+    assert "stackedGroups.push(lineObj.group)" in resp.text
 
 
 def test_root_static_aliases(tmp_path, monkeypatch):

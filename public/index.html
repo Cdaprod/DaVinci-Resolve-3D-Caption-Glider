@@ -1670,6 +1670,11 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
     }
     if (index < 0) return;
 
+    const lineObj = timelineLines[index];
+    if (!lineObj) return;
+    lineObj.group.position.y = 0;
+    resetLineRevealState(lineObj);
+
     if (keepStacked) {
       for (let i = 0; i < index; i++) {
         const prev = timelineLines[i];
@@ -1678,14 +1683,12 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
         finalizeLineVisibility(prev);
         stackedGroups.push(prev.group);
       }
+      if (!stackedGroups.includes(lineObj.group)) {
+        stackedGroups.push(lineObj.group);
+      }
       enforceStackLimit();
       reflowStackedGroups();
     }
-
-    const lineObj = timelineLines[index];
-    if (!lineObj) return;
-    lineObj.group.position.y = 0;
-    resetLineRevealState(lineObj);
     scene.add(lineObj.group);
   }
 

@@ -2772,9 +2772,13 @@ ${String(err)}`);
   function computeDesiredFov(baseFov, span) {
     const shrinkPerUnit = 6;
     const minFov = 26;
+    const maxFov = 70;
+    const widenStart = 1.2;
     const fullSpan = Math.max(0, span);
-    const desired = baseFov - (fullSpan * shrinkPerUnit);
-    return Math.max(minFov, Math.min(baseFov, desired));
+    const zoomed = baseFov - (fullSpan * shrinkPerUnit);
+    const widened = baseFov + Math.max(0, fullSpan - widenStart) * 8;
+    const desired = fullSpan > widenStart ? Math.max(zoomed, widened) : zoomed;
+    return Math.max(minFov, Math.min(maxFov, desired));
   }
 
   function frameCameraSettings(baseDistance, activeIdx, widths, bounds) {
@@ -2784,7 +2788,8 @@ ${String(err)}`);
     const padding = Math.max(0.05, cfg.trackLeadPx + cfg.endOverhangPx * 0.5);
     const desiredFov = computeDesiredFov(BASE_FOV, span);
     const distance = requiredDistanceForSpan(span, camera.aspect, desiredFov, baseDistance, padding);
-    return { distance, fov: desiredFov };
+    const maxDistance = Math.max(baseDistance, baseDistance + Math.max(1.6, span * 0.35));
+    return { distance: Math.min(distance, maxDistance), fov: desiredFov };
   }
 
   function easeOutEndU(u) {

@@ -486,6 +486,8 @@ function testRecordingUiHooked() {
   assert.ok(html.includes('material?.emissive?.copy'), 'highlight update should guard emissive materials');
   assert.ok(html.includes("linesUrl: '/public/demo-lines.txt'"), 'default demo lines URL should point at /public');
   assert.ok(html.includes('recordingDownloadUrl'), 'recording download URL should be tracked for cleanup');
+  assert.ok(html.includes('const maxFov = 70'), 'camera framing should cap max fov for long lines');
+  assert.ok(html.includes('const maxDistance = Math.max(baseDistance, baseDistance + Math.max(1.6, span * 0.35))'), 'camera framing should clamp distance for long lines');
 }
 
 function run() {

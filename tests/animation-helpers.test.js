@@ -31,6 +31,7 @@ const {
   computeAnimationTime,
   applyFlipScalar,
   applyFlipScalarLog,
+  clampRangeValue,
   patchNoiseShaderSources,
 } = require('../public/animation-helpers');
 
@@ -110,6 +111,13 @@ function testApplyFlipScalarLog() {
 
   const settled = applyFlipScalarLog(initial.value, 1, initial.flip, 8, 0.5);
   assert(settled.value < initial.value, 'log flip should settle scale toward target');
+}
+
+function testClampRangeValue() {
+  assert.strictEqual(clampRangeValue('bad', { min: 1, max: 4, fallback: 2 }), 2);
+  assert.strictEqual(clampRangeValue(0, { min: 1, max: 4, fallback: 2 }), 1);
+  assert.strictEqual(clampRangeValue(5, { min: 1, max: 4, fallback: 2 }), 4);
+  assert.strictEqual(clampRangeValue(3, { min: 1, max: 4, fallback: 2 }), 3);
 }
 
 function testExtractEmphasisToken() {
@@ -497,6 +505,7 @@ function run() {
   testComputeAnimationTime();
   testApplyFlipScalar();
   testApplyFlipScalarLog();
+  testClampRangeValue();
   testEndBias();
   testExtractEmphasisToken();
   testParseScriptLines();

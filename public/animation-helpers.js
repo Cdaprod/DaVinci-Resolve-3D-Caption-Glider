@@ -80,6 +80,16 @@
     return { value: safeTarget * Math.exp(nextFlip), flip: nextFlip };
   }
 
+  function clampRangeValue(value, { min = 0, max = Infinity, fallback = 0 } = {}) {
+    const num = Number(value);
+    const minNum = Number(min);
+    const maxNum = Number(max);
+    const safeMin = Number.isFinite(minNum) ? minNum : 0;
+    const safeMax = Number.isFinite(maxNum) ? maxNum : Infinity;
+    if (!Number.isFinite(num)) return fallback;
+    return Math.min(safeMax, Math.max(safeMin, num));
+  }
+
   function computeAnimationTime(currentTimeSec, startTimeSec, options = {}) {
     const { speed = 1, delayMs = 0 } = options || {};
     const start = Number(startTimeSec) || 0;
@@ -521,6 +531,7 @@
     damp,
     applyFlipScalar,
     applyFlipScalarLog,
+    clampRangeValue,
     computeAnimationTime,
     isValidFontResource,
     normalizeFontResource,

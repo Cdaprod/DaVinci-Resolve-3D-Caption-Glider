@@ -1679,6 +1679,7 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
       mesh.userData.revealed = false;
       mesh.scale.setScalar(1);
       mesh.position.copy(mesh.userData.basePos);
+      resetFlipState(mesh);
     }
   }
 
@@ -1691,6 +1692,7 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
       mesh.userData.revealed = true;
       mesh.scale.setScalar(1);
       mesh.position.copy(mesh.userData.basePos);
+      resetFlipState(mesh);
     }
   }
 
@@ -1842,7 +1844,7 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
       for (let k = 0; k <= revealIdx; k++) startReveal(meshes[k], now || performance.now());
     }
 
-    for (const m of meshes) tickReveal(m, now || performance.now());
+    for (const m of meshes) tickReveal(m, now || performance.now(), dt);
 
     updateActiveHighlight(meshes, activeIdx, emphasisProfile, dt);
 
@@ -2361,6 +2363,8 @@ ${String(err)}`);
       mesh.userData.emphasis = !!emphasisFlags[i];
       mesh.userData.isLast = (i === parsedWords.length - 1);
       mesh.userData.activeWeight = 0;
+      mesh.userData.flipOffset = new THREE.Vector3(0, 0, 0);
+      mesh.userData.flipScale = new THREE.Vector3(0, 0, 0);
 
       group.add(mesh);
       meshes.push(mesh);
@@ -2401,6 +2405,43 @@ ${String(err)}`);
     return valid.includes(id) ? id : 'slide-up';
   }
 
+  function resetFlipState(mesh) {
+    if (!mesh?.userData) return;
+    if (!mesh.userData.flipOffset) mesh.userData.flipOffset = new THREE.Vector3(0, 0, 0);
+    if (!mesh.userData.flipScale) mesh.userData.flipScale = new THREE.Vector3(0, 0, 0);
+    mesh.userData.flipOffset.set(0, 0, 0);
+    mesh.userData.flipScale.set(0, 0, 0);
+  }
+
+  function applyFlipTransform(mesh, targetPos, targetScale, dt, lambda = 18) {
+    if (!mesh?.userData) return;
+    const safeDt = Math.max(0.001, Number(dt) || 0.016);
+    const posFlip = mesh.userData.flipOffset || new THREE.Vector3(0, 0, 0);
+    const scaleFlip = mesh.userData.flipScale || new THREE.Vector3(0, 0, 0);
+    const flipScalar = AnimationHelpers?.applyFlipScalar;
+    const flipScalarLog = AnimationHelpers?.applyFlipScalarLog;
+    if (!flipScalar || !flipScalarLog) {
+      mesh.position.copy(targetPos);
+      mesh.scale.copy(targetScale);
+      return;
+    }
+
+    const x = flipScalar(mesh.position.x, targetPos.x, posFlip.x, lambda, safeDt);
+    const y = flipScalar(mesh.position.y, targetPos.y, posFlip.y, lambda, safeDt);
+    const z = flipScalar(mesh.position.z, targetPos.z, posFlip.z, lambda, safeDt);
+    posFlip.set(x.flip, y.flip, z.flip);
+    mesh.position.set(x.value, y.value, z.value);
+
+    const sx = flipScalarLog(mesh.scale.x, targetScale.x, scaleFlip.x, lambda, safeDt);
+    const sy = flipScalarLog(mesh.scale.y, targetScale.y, scaleFlip.y, lambda, safeDt);
+    const sz = flipScalarLog(mesh.scale.z, targetScale.z, scaleFlip.z, lambda, safeDt);
+    scaleFlip.set(sx.flip, sy.flip, sz.flip);
+    mesh.scale.set(sx.value, sy.value, sz.value);
+
+    mesh.userData.flipOffset = posFlip;
+    mesh.userData.flipScale = scaleFlip;
+  }
+
   function startReveal(mesh, now) {
     if (mesh.userData.revealed) return;
 
@@ -2408,6 +2449,7 @@ ${String(err)}`);
     mesh.visible = true;
     mesh.userData.revealStart = now;
     mesh.material.opacity = 0;
+    resetFlipState(mesh);
 
     const style = normalizeRevealStyle(mesh?.userData?.revealStyle || cfg.revealStyle);
     mesh.userData.revealStyle = style;
@@ -2482,7 +2524,7 @@ ${String(err)}`);
     );
   }
 
-  function tickReveal(mesh, now) {
+  function tickReveal(mesh, now, dt) {
     if (!mesh.visible) return;
     const t0 = mesh.userData.revealStart;
     if (t0 === null) return;
@@ -2507,7 +2549,7 @@ ${String(err)}`);
     const styleScale = THREE.MathUtils.lerp(startScale, Math.max(startScale, popScale), backEase);
     const settleScale = THREE.MathUtils.lerp(styleScale, 1, liftEase);
 
-    mesh.position.set(
+    const targetPos = new THREE.Vector3(
       mesh.userData.basePos.x,
       mesh.userData.basePos.y + rise * (1 - liftEase),
       mesh.userData.basePos.z + depth * (1 - liftEase)
@@ -2541,13 +2583,14 @@ ${String(err)}`);
 
     mesh.material.opacity = opacity;
 
-    mesh.scale.set(axisX * emScale, uni, uni);
+    const targetScale = new THREE.Vector3(axisX * emScale, uni, uni);
+    applyFlipTransform(mesh, targetPos, targetScale, dt);
 
     if (t >= 1) {
       mesh.userData.revealStart = null;
       mesh.material.opacity = 1;
-      mesh.scale.setScalar(emphasisScaleFor(mesh, cfg.revealMs + (profile?.emphasisSettleMs ?? 0), profile));
-      mesh.position.copy(mesh.userData.basePos);
+      const settle = emphasisScaleFor(mesh, cfg.revealMs + (profile?.emphasisSettleMs ?? 0), profile);
+      applyFlipTransform(mesh, mesh.userData.basePos, new THREE.Vector3(settle, settle, settle), dt);
     }
   }
 
@@ -2585,8 +2628,14 @@ ${String(err)}`);
         const baseScale = m.userData.emphasis
           ? 1 + ((emphasisProfile?.emphasisScale ?? 1) - 1) * 0.65
           : 1;
-        const activeScale = 1 + 0.08 * next;
-        m.scale.setScalar(baseScale * activeScale);
+        const activeScaleWide = 1 + 0.14 * next;
+        const activeScaleTall = 1 + 0.08 * next;
+        const targetScale = new THREE.Vector3(
+          baseScale * activeScaleWide,
+          baseScale * activeScaleTall,
+          baseScale * activeScaleTall
+        );
+        applyFlipTransform(m, m.userData.basePos, targetScale, dt, Math.max(10, cfg.highlightLambda || 12));
       }
     }
   }
@@ -2720,6 +2769,7 @@ ${String(err)}`);
       m.scale.setScalar(1);
       m.position.copy(m.userData.basePos);
       m.userData.revealStyle = activeRevealStyle;
+      resetFlipState(m);
     }
 
     if (n === 0) { onComplete?.(); return; }
@@ -2800,7 +2850,7 @@ ${String(err)}`);
         for (let k = 0; k <= revealIdx; k++) startReveal(meshes[k], now);
       }
 
-      for (const m of meshes) tickReveal(m, now);
+      for (const m of meshes) tickReveal(m, now, dt);
 
       updateActiveHighlight(meshes, activeIdx, emphasisProfile, dt);
 
@@ -2836,6 +2886,7 @@ ${String(err)}`);
           m.userData.revealStart = null;
           m.scale.setScalar(1);
           m.position.copy(m.userData.basePos);
+          resetFlipState(m);
         }
         const terminalHold = (emphasisProfile?.terminalHoldMs ?? 0) + ((Array.isArray(emphasisFlags) && emphasisFlags[n - 1]) ? (emphasisProfile?.emphasisHoldMs ?? 0) : 0);
         const profileHold = Math.max(0, (lineProfile?.holdMs ?? 0) + (lineObj?.holdMs ?? 0));
@@ -2865,6 +2916,7 @@ ${String(err)}`);
       m.scale.setScalar(1);
       m.position.copy(m.userData.basePos);
       m.userData.revealStyle = activeRevealStyle;
+      resetFlipState(m);
     }
 
     if (n === 0) { onComplete?.(); return; }
@@ -2940,7 +2992,7 @@ ${String(err)}`);
       const revealIdx = Math.min(n - 1, Math.floor(p + revealWordLead));
       for (let k = 0; k <= revealIdx; k++) startReveal(meshes[k], now);
 
-      for (const m of meshes) tickReveal(m, now);
+      for (const m of meshes) tickReveal(m, now, dt);
 
       updateActiveHighlight(meshes, activeIdx, emphasisProfile, dt);
 
@@ -2976,6 +3028,7 @@ ${String(err)}`);
           m.userData.revealStart = null;
           m.scale.setScalar(1);
           m.position.copy(m.userData.basePos);
+          resetFlipState(m);
         }
         const terminalHold = (emphasisProfile?.terminalHoldMs ?? 0) + ((Array.isArray(emphasisFlags) && emphasisFlags[n - 1]) ? (emphasisProfile?.emphasisHoldMs ?? 0) : 0);
         const profileHold = Math.max(0, (lineProfile?.holdMs ?? 0) + (lineObj?.holdMs ?? 0));

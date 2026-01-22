@@ -1534,7 +1534,8 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
 
       const lines = await loadLines(cfg.linesUrl);
       if (!fontRef) fontRef = await loadFontFromSelection();
-      buildFromPlainLines(fontRef, lines);
+      const wpl = Number(wplEl.value);
+      buildFromPlainLines(fontRef, lines, wpl);
       setStatus(`Generated captions for ${videoRel}\nLines: ${lines.length}`);
       setWorkspaceStatus('Captions ready.');
       replay();
@@ -2137,6 +2138,55 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
         }
 
         return segments;
+      };
+  const wrapScriptSegmentsByWords = (window.AnimationHelpers && typeof window.AnimationHelpers.wrapScriptSegmentsByWords === 'function')
+    ? window.AnimationHelpers.wrapScriptSegmentsByWords
+    : function fallbackWrap(segments = [], maxWords = 0, { preferSentenceBreaks = true } = {}) {
+        const safeMax = Math.max(0, Number(maxWords) || 0);
+        if (!safeMax || !Array.isArray(segments)) return segments;
+        const punctRegex = /[.!?…]+$/;
+        const wrapped = [];
+
+        for (const seg of segments) {
+          const text = String(seg?.text || '').trim();
+          if (!text) continue;
+          const words = text.split(/\s+/).filter(Boolean);
+          if (words.length <= safeMax) {
+            wrapped.push(seg);
+            continue;
+          }
+
+          let idx = 0;
+          while (idx < words.length) {
+            const remaining = words.length - idx;
+            let end = remaining <= safeMax ? words.length : idx + safeMax;
+
+            if (preferSentenceBreaks && end < words.length) {
+              let boundary = -1;
+              for (let j = end - 1; j > idx; j -= 1) {
+                if (punctRegex.test(words[j])) {
+                  boundary = j + 1;
+                  break;
+                }
+              }
+              if (boundary > idx) end = boundary;
+            }
+
+            const chunk = words.slice(idx, end);
+            const isFirst = idx === 0;
+            const isLast = end >= words.length;
+            wrapped.push({
+              ...seg,
+              text: chunk.join(' '),
+              pauseMs: isFirst ? seg.pauseMs : 0,
+              holdMs: isLast ? seg.holdMs : 0,
+              breaks: isFirst ? seg.breaks : 0,
+            });
+            idx = end;
+          }
+        }
+
+        return wrapped;
       };
 
   function getLineProfile(profileId = DEFAULT_LINE_PROFILE_ID) {
@@ -3182,7 +3232,8 @@ ${String(err)}`);
         buildFromTimedLines(font, timedLines);
       } else {
         const lines = await loadLines(cfg.linesUrl);
-        buildFromPlainLines(font, lines);
+        const wpl = Number(wplEl.value);
+        buildFromPlainLines(font, lines, wpl);
       }
 
       if (lineObjs.length === 0) {
@@ -3224,12 +3275,13 @@ ${String(err)}`);
     lineImportStats.segmentCount = lineObjs.length;
   }
 
-  function buildFromPlainLines(font, lines) {
+  function buildFromPlainLines(font, lines, maxWordsPerLine = 0) {
     clearAllLinesFromScene();
     lineImportStats = { rawLineCount: Array.isArray(lines) ? lines.length : 0, segmentCount: 0 };
     lineObjs = [];
     const segments = parseScriptLines(lines, DEFAULT_LINE_PROFILE_ID);
-    for (const seg of segments) {
+    const wrappedSegments = wrapScriptSegmentsByWords(segments, maxWordsPerLine, { preferSentenceBreaks: true });
+    for (const seg of wrappedSegments) {
       const obj = buildLine(font, seg.text);
       obj.profileId = seg.profileId || DEFAULT_LINE_PROFILE_ID;
       obj.profileSettings = getLineProfile(obj.profileId);
@@ -3549,7 +3601,8 @@ ${String(err)}`);
     }
 
     const lines = await loadLines(cfg.linesUrl);
-    buildFromPlainLines(fontRef, lines);
+    const wpl = Number(wplEl.value);
+    buildFromPlainLines(fontRef, lines, wpl);
     prepareTimelineFromLineObjs(lineObjs);
     setTimelineTime(timelineState.currentMs || 0);
     renderTimelineFrame(performance.now());
@@ -3670,7 +3723,8 @@ ${String(err)}`);
 
     // fallback to demo-lines.txt
     const lines = await loadLines(cfg.linesUrl);
-    buildFromPlainLines(font, lines);
+    const wpl = Number(wplEl.value);
+    buildFromPlainLines(font, lines, wpl);
 
     camera.position.set(0, 0, cfg.cameraDistance);
     camera.lookAt(new THREE.Vector3(0,0,0));

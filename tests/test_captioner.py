@@ -119,6 +119,7 @@ def test_root_serves_ui(tmp_path, monkeypatch):
     assert "computeDesiredFov" in resp.text
     assert "pendingRemovalGroup" in resp.text
     assert "getActiveTimelineIndex" in resp.text
+    assert "cloneCameraState" in resp.text
     assert "startReveal(current.meshes[0]" in resp.text
     assert "stackedGroups.push(lineObj.group)" in resp.text
 

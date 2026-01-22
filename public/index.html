@@ -1626,10 +1626,10 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
     return -1;
   }
 
-  function resetLineRevealState(lineObj) {
+  function resetLineRevealState(lineObj, { cameraState = null, lastRenderAt = null } = {}) {
     if (!lineObj?.meshes) return;
-    lineObj.cameraState = null;
-    lineObj.lastRenderAt = null;
+    lineObj.cameraState = cameraState;
+    lineObj.lastRenderAt = lastRenderAt;
     for (const mesh of lineObj.meshes) {
       mesh.visible = false;
       mesh.material.opacity = 0;
@@ -1652,11 +1652,31 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
     }
   }
 
+  function cloneCameraState(state) {
+    if (!state) return null;
+    return {
+      camX: state.camX,
+      camY: state.camY,
+      lookAtX: state.lookAtX,
+      lookAtY: state.lookAtY,
+      camDistance: state.camDistance,
+      camFov: state.camFov,
+      targetX: state.targetX,
+      targetY: state.targetY,
+    };
+  }
+
   function ensureActiveTimelineLine(index) {
     if (index === timelineState.activeIndex) return;
 
     const keepStacked = cfg.keepPreviousLinesVisible && cfg.stackLines;
     const movingForward = index > timelineState.activeIndex;
+    const prevIndex = timelineState.activeIndex;
+    const prevLine = prevIndex >= 0 ? timelineLines[prevIndex] : null;
+    const carryCameraState = cfg.keepPreviousLinesVisible && prevLine?.cameraState
+      ? cloneCameraState(prevLine.cameraState)
+      : null;
+    const carryLastRenderAt = carryCameraState ? (prevLine?.lastRenderAt ?? null) : null;
 
     if (!keepStacked || (!movingForward && index >= 0)) {
       clearAllLinesFromScene();
@@ -1673,7 +1693,10 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
     const lineObj = timelineLines[index];
     if (!lineObj) return;
     lineObj.group.position.y = 0;
-    resetLineRevealState(lineObj);
+    resetLineRevealState(lineObj, {
+      cameraState: carryCameraState,
+      lastRenderAt: carryLastRenderAt,
+    });
 
     if (keepStacked) {
       for (let i = 0; i < index; i++) {

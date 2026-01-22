@@ -2785,11 +2785,11 @@ ${String(err)}`);
     const lineSpan = computeLineSpan(bounds);
     const focusSpan = computeFocusSpan(activeIdx, widths, bounds);
     const span = Math.max(lineSpan, focusSpan);
+    const spanForCamera = Math.min(span, 4.5);
     const padding = Math.max(0.05, cfg.trackLeadPx + cfg.endOverhangPx * 0.5);
-    const desiredFov = computeDesiredFov(BASE_FOV, span);
-    const distance = requiredDistanceForSpan(span, camera.aspect, desiredFov, baseDistance, padding);
-    const maxDistance = Math.max(baseDistance, baseDistance + Math.max(1.6, span * 0.35));
-    return { distance: Math.min(distance, maxDistance), fov: desiredFov };
+    const desiredFov = computeDesiredFov(BASE_FOV, spanForCamera);
+    const distance = requiredDistanceForSpan(spanForCamera, camera.aspect, desiredFov, baseDistance, padding);
+    return { distance, fov: desiredFov };
   }
 
   function easeOutEndU(u) {

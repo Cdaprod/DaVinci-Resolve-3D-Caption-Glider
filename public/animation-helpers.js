@@ -66,6 +66,15 @@
     return current + (target - current) * (1 - Math.exp(-lambda * dt));
   }
 
+  function computeAnimationTime(currentTimeSec, startTimeSec, options = {}) {
+    const { speed = 1, delayMs = 0 } = options || {};
+    const start = Number(startTimeSec) || 0;
+    const safeSpeed = Math.max(0.01, Number(speed) || 1);
+    const delaySec = Math.max(0, Number(delayMs) || 0) / 1000;
+    const rel = (Number(currentTimeSec) || 0) - start - delaySec;
+    return start + (rel * safeSpeed);
+  }
+
   function isValidFontResource(font) {
     if (!font || typeof font !== 'object') return false;
     const data = font.data;
@@ -448,6 +457,7 @@
     easeOutCubic,
     easeOutBack,
     damp,
+    computeAnimationTime,
     isValidFontResource,
     normalizeFontResource,
     computeCenterBounds,

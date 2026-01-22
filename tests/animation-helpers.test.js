@@ -27,6 +27,7 @@ const {
   lineAlignmentOffset,
   parseSrtCues,
   buildCueWordTimings,
+  computeAnimationTime,
   patchNoiseShaderSources,
 } = require('../public/animation-helpers');
 
@@ -81,6 +82,15 @@ function testEndBias() {
   assert.strictEqual(endBias(0.6, 0.2), 0); // before bias window
   const nearEnd = endBias(1, 0.2);
   assert(nearEnd <= 0.2 + 1e-9 && nearEnd >= 0.19, 'bias should reach near max');
+}
+
+function testComputeAnimationTime() {
+  const start = 10;
+  const delayed = computeAnimationTime(10.1, start, { speed: 1, delayMs: 200 });
+  assert.strictEqual(Number(delayed.toFixed(3)), 9.9);
+
+  const spedUp = computeAnimationTime(10.5, start, { speed: 2, delayMs: 100 });
+  assert.strictEqual(Number(spedUp.toFixed(3)), 10.8);
 }
 
 function testExtractEmphasisToken() {
@@ -425,6 +435,7 @@ function run() {
   testIsValidFontResource();
   testNormalizeFontResource();
   testComputeCenterBounds();
+  testComputeAnimationTime();
   testEndBias();
   testExtractEmphasisToken();
   testParseScriptLines();

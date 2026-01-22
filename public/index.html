@@ -2454,20 +2454,28 @@ ${String(err)}`);
       return { group, meshes, centers, widths, emphasisFlags, normalizedWords };
     }
 
+  const buildTimedLinesFromTranscript = (window.AnimationHelpers && typeof window.AnimationHelpers.buildTimedLinesFromTranscript === 'function')
+    ? window.AnimationHelpers.buildTimedLinesFromTranscript
+    : function fallbackTimedLines(words = [], wordsPerLine = 8) {
+        const entries = Array.isArray(words) ? words : [];
+        const safeWordsPerLine = Math.max(1, Math.round(Number(wordsPerLine) || 1));
+        const lines = [];
+        for (let i = 0; i < entries.length; i += safeWordsPerLine) {
+          const chunk = entries.slice(i, i + safeWordsPerLine);
+          if (!chunk.length) continue;
+          const parsed = chunk.map(w => parseEmphasisToken(w?.text ?? ''));
+          const text = parsed.map(p => p.cleanText).join(' ');
+          const startTime = Number(chunk[0]?.startTime ?? 0);
+          const endTime = Number(chunk[chunk.length - 1]?.endTime ?? startTime);
+          const normalizedWords = chunk.map((w, idx) => ({ ...w, text: parsed[idx].cleanText, emphasis: parsed[idx].isEmphasized }));
+          lines.push({ text, startTime, endTime, words: normalizedWords });
+        }
+        return lines;
+      };
+
   function transcriptionToTimedLines(transcription, wordsPerLine = 8) {
     const words = Array.isArray(transcription?.words) ? transcription.words : [];
-    const lines = [];
-    for (let i = 0; i < words.length; i += wordsPerLine) {
-      const chunk = words.slice(i, i + wordsPerLine);
-      if (!chunk.length) continue;
-      const parsed = chunk.map(w => parseEmphasisToken(w.text ?? ''));
-      const text = parsed.map(p => p.cleanText).join(' ');
-      const startTime = Number(chunk[0].startTime ?? 0);
-      const endTime = Number(chunk[chunk.length - 1].endTime ?? startTime);
-      const normalizedWords = chunk.map((w, idx) => ({ ...w, text: parsed[idx].cleanText, emphasis: parsed[idx].isEmphasized }));
-      lines.push({ text, startTime, endTime, words: normalizedWords });
-    }
-    return lines;
+    return buildTimedLinesFromTranscript(words, wordsPerLine);
   }
 
   // -------------------------

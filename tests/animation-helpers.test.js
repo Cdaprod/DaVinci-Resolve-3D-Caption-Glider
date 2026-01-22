@@ -28,6 +28,7 @@ const {
   lineAlignmentOffset,
   parseSrtCues,
   buildCueWordTimings,
+  buildTimedLinesFromTranscript,
   computeAnimationTime,
   applyFlipScalar,
   applyFlipScalarLog,
@@ -427,6 +428,27 @@ function testBuildCueWordTimings() {
   assert(words[1].endTime <= 1);
 }
 
+function testBuildTimedLinesFromTranscript() {
+  const wordEntries = [
+    { text: 'Now', startTime: 0, endTime: 0.2 },
+    { text: 'you', startTime: 0.2, endTime: 0.4 },
+    { text: 'see', startTime: 0.4, endTime: 0.6 },
+  ];
+  const grouped = buildTimedLinesFromTranscript(wordEntries, 2);
+  assert.strictEqual(grouped.length, 2);
+  assert.strictEqual(grouped[0].text, 'Now you');
+  assert.strictEqual(grouped[0].words.length, 2);
+
+  const lineEntries = [
+    { text: 'Now you see', startTime: 0, endTime: 1 },
+    { text: 'the pattern', startTime: 1, endTime: 2 },
+  ];
+  const lineGrouped = buildTimedLinesFromTranscript(lineEntries, 2);
+  assert.strictEqual(lineGrouped.length, 2);
+  assert.strictEqual(lineGrouped[0].text, 'Now you see');
+  assert.strictEqual(lineGrouped[0].words.length, 3);
+}
+
 function testSeedFilesAreCleanObjects() {
   const seeds = [
     path.join(__dirname, '..', 'public', 'localStorage.json'),
@@ -525,6 +547,7 @@ function run() {
   testNormalizePersistedPayload();
   testParseSrtCues();
   testBuildCueWordTimings();
+  testBuildTimedLinesFromTranscript();
   testSeedFilesAreCleanObjects();
   testSeedThemesMatchPalettes();
   testRecordingUiHooked();

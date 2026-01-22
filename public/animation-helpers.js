@@ -272,6 +272,69 @@
     return words;
   }
 
+  function buildTimedLinesFromTranscript(words = [], wordsPerLine = 8, options = {}) {
+    const entries = Array.isArray(words) ? words : [];
+    if (!entries.length) return [];
+    const safeWordsPerLine = Math.max(1, Math.round(Number(wordsPerLine) || 1));
+    const { minAvgWords = 1.6, minMultiWordRatio = 0.25 } = options || {};
+
+    let totalWords = 0;
+    let multiWordEntries = 0;
+    let entryCount = 0;
+
+    for (const entry of entries) {
+      const text = String(entry?.text ?? '').trim();
+      if (!text) continue;
+      const count = text.split(/\s+/).filter(Boolean).length;
+      entryCount += 1;
+      totalWords += count;
+      if (count > 1) multiWordEntries += 1;
+    }
+
+    const avgWords = entryCount ? totalWords / entryCount : 0;
+    const multiWordRatio = entryCount ? (multiWordEntries / entryCount) : 0;
+    const treatAsLines = avgWords >= minAvgWords && multiWordRatio >= minMultiWordRatio;
+
+    if (treatAsLines) {
+      return entries.map((entry) => {
+        const rawText = String(entry?.text ?? '').trim();
+        if (!rawText) return null;
+        const startTime = Number(entry?.startTime ?? entry?.start ?? 0);
+        const endTime = Number(entry?.endTime ?? entry?.end ?? startTime);
+        const wordTimings = buildCueWordTimings(rawText, startTime * 1000, endTime * 1000);
+        const parsed = wordTimings.map(w => extractEmphasisToken(w.text ?? ''));
+        const normalizedWords = wordTimings.map((w, idx) => ({
+          ...w,
+          text: parsed[idx].cleanText,
+          emphasis: parsed[idx].isEmphasized,
+        }));
+        return {
+          text: normalizedWords.map(w => w.text).join(' '),
+          startTime,
+          endTime,
+          words: normalizedWords,
+        };
+      }).filter(Boolean);
+    }
+
+    const lines = [];
+    for (let i = 0; i < entries.length; i += safeWordsPerLine) {
+      const chunk = entries.slice(i, i + safeWordsPerLine);
+      if (!chunk.length) continue;
+      const parsed = chunk.map(w => extractEmphasisToken(w?.text ?? ''));
+      const text = parsed.map(p => p.cleanText).join(' ');
+      const startTime = Number(chunk[0]?.startTime ?? chunk[0]?.start ?? 0);
+      const endTime = Number(chunk[chunk.length - 1]?.endTime ?? chunk[chunk.length - 1]?.end ?? startTime);
+      const normalizedWords = chunk.map((w, idx) => ({
+        ...w,
+        text: parsed[idx].cleanText,
+        emphasis: parsed[idx].isEmphasized,
+      }));
+      lines.push({ text, startTime, endTime, words: normalizedWords });
+    }
+    return lines;
+  }
+
   function sanitizePersistedState(defaults = {}, stored = {}) {
     const base = (defaults && typeof defaults === 'object') ? defaults : {};
     const src = (stored && typeof stored === 'object') ? stored : {};
@@ -548,6 +611,7 @@
     stripControlTokens,
     parseSrtCues,
     buildCueWordTimings,
+    buildTimedLinesFromTranscript,
     normalizeProfileToken,
     normalizeTextAlign,
     lineAlignmentOffset,

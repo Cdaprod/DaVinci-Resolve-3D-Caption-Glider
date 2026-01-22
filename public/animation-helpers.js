@@ -66,6 +66,20 @@
     return current + (target - current) * (1 - Math.exp(-lambda * dt));
   }
 
+  function applyFlipScalar(currentValue, targetValue, flipValue, lambda, dt) {
+    const delta = (currentValue - targetValue);
+    const nextFlip = damp((flipValue || 0) + delta, 0, lambda, dt);
+    return { value: targetValue + nextFlip, flip: nextFlip };
+  }
+
+  function applyFlipScalarLog(currentValue, targetValue, flipValue, lambda, dt) {
+    const safeCurrent = Math.max(1e-6, Number(currentValue) || 0);
+    const safeTarget = Math.max(1e-6, Number(targetValue) || 0);
+    const delta = Math.log(safeCurrent / safeTarget);
+    const nextFlip = damp((flipValue || 0) + delta, 0, lambda, dt);
+    return { value: safeTarget * Math.exp(nextFlip), flip: nextFlip };
+  }
+
   function computeAnimationTime(currentTimeSec, startTimeSec, options = {}) {
     const { speed = 1, delayMs = 0 } = options || {};
     const start = Number(startTimeSec) || 0;
@@ -457,6 +471,8 @@
     easeOutCubic,
     easeOutBack,
     damp,
+    applyFlipScalar,
+    applyFlipScalarLog,
     computeAnimationTime,
     isValidFontResource,
     normalizeFontResource,

@@ -28,6 +28,8 @@ const {
   parseSrtCues,
   buildCueWordTimings,
   computeAnimationTime,
+  applyFlipScalar,
+  applyFlipScalarLog,
   patchNoiseShaderSources,
 } = require('../public/animation-helpers');
 
@@ -91,6 +93,22 @@ function testComputeAnimationTime() {
 
   const spedUp = computeAnimationTime(10.5, start, { speed: 2, delayMs: 100 });
   assert.strictEqual(Number(spedUp.toFixed(3)), 10.8);
+}
+
+function testApplyFlipScalar() {
+  const initial = applyFlipScalar(10, 4, 0, 8, 0.016);
+  assert(initial.value > 4, 'flip should keep value closer to the original on the first frame');
+
+  const settled = applyFlipScalar(initial.value, 4, initial.flip, 8, 0.5);
+  assert(Math.abs(settled.value - 4) < Math.abs(initial.value - 4), 'flip should settle toward the target');
+}
+
+function testApplyFlipScalarLog() {
+  const initial = applyFlipScalarLog(2, 1, 0, 8, 0.016);
+  assert(initial.value > 1, 'log flip should keep scale closer to original');
+
+  const settled = applyFlipScalarLog(initial.value, 1, initial.flip, 8, 0.5);
+  assert(settled.value < initial.value, 'log flip should settle scale toward target');
 }
 
 function testExtractEmphasisToken() {
@@ -436,6 +454,8 @@ function run() {
   testNormalizeFontResource();
   testComputeCenterBounds();
   testComputeAnimationTime();
+  testApplyFlipScalar();
+  testApplyFlipScalarLog();
   testEndBias();
   testExtractEmphasisToken();
   testParseScriptLines();

@@ -417,6 +417,54 @@
     return segments;
   }
 
+  function wrapScriptSegmentsByWords(segments = [], maxWords = 0, { preferSentenceBreaks = true } = {}) {
+    const safeMax = Math.max(0, Number(maxWords) || 0);
+    if (!safeMax || !Array.isArray(segments)) return segments;
+    const punctRegex = /[.!?…]+$/;
+    const wrapped = [];
+
+    for (const seg of segments) {
+      const text = String(seg?.text || '').trim();
+      if (!text) continue;
+      const words = text.split(/\s+/).filter(Boolean);
+      if (words.length <= safeMax) {
+        wrapped.push(seg);
+        continue;
+      }
+
+      let idx = 0;
+      while (idx < words.length) {
+        const remaining = words.length - idx;
+        let end = remaining <= safeMax ? words.length : idx + safeMax;
+
+        if (preferSentenceBreaks && end < words.length) {
+          let boundary = -1;
+          for (let j = end - 1; j > idx; j -= 1) {
+            if (punctRegex.test(words[j])) {
+              boundary = j + 1;
+              break;
+            }
+          }
+          if (boundary > idx) end = boundary;
+        }
+
+        const chunk = words.slice(idx, end);
+        const isFirst = idx === 0;
+        const isLast = end >= words.length;
+        wrapped.push({
+          ...seg,
+          text: chunk.join(' '),
+          pauseMs: isFirst ? seg.pauseMs : 0,
+          holdMs: isLast ? seg.holdMs : 0,
+          breaks: isFirst ? seg.breaks : 0,
+        });
+        idx = end;
+      }
+    }
+
+    return wrapped;
+  }
+
   function extractEmphasisToken(wordText = '') {
     const isEmphasized = /\*\*(.+?)\*\*/.test(wordText);
     const cleanText = String(wordText).replace(/\*\*/g, '') || String(wordText || '').trim();
@@ -481,6 +529,7 @@
     visibleHalfWidth,
     requiredDistanceForSpan,
     extractEmphasisToken,
+    wrapScriptSegmentsByWords,
     buildTextGeometrySpec,
     sanitizePersistedState,
     normalizePersistedPayload,

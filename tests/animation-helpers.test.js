@@ -11,6 +11,7 @@ const {
   endBias,
   extractEmphasisToken,
   parseScriptLines,
+  wrapScriptSegmentsByWords,
   stripControlTokens,
   normalizeProfileToken,
   visibleHalfWidth,
@@ -152,6 +153,45 @@ function testParseScriptLines() {
   assert.deepStrictEqual(segments[2], {
     profileId: 'C',
     text: 'Third line **bold** word',
+    pauseMs: 0,
+    holdMs: 200,
+    breaks: 0,
+  });
+}
+
+function testWrapScriptSegmentsByWords() {
+  const segments = [
+    {
+      profileId: 'default',
+      text: 'One two. Three four five six seven',
+      pauseMs: 120,
+      holdMs: 200,
+      breaks: 1,
+    },
+  ];
+
+  const wrapped = wrapScriptSegmentsByWords(segments, 4, { preferSentenceBreaks: true });
+  assert.strictEqual(wrapped.length, 3);
+
+  assert.deepStrictEqual(wrapped[0], {
+    profileId: 'default',
+    text: 'One two.',
+    pauseMs: 120,
+    holdMs: 0,
+    breaks: 1,
+  });
+
+  assert.deepStrictEqual(wrapped[1], {
+    profileId: 'default',
+    text: 'Three four five six',
+    pauseMs: 0,
+    holdMs: 0,
+    breaks: 0,
+  });
+
+  assert.deepStrictEqual(wrapped[2], {
+    profileId: 'default',
+    text: 'seven',
     pauseMs: 0,
     holdMs: 200,
     breaks: 0,
@@ -446,6 +486,7 @@ function testRecordingUiHooked() {
   assert.ok(html.includes('material?.emissive?.copy'), 'highlight update should guard emissive materials');
   assert.ok(html.includes("linesUrl: '/public/demo-lines.txt'"), 'default demo lines URL should point at /public');
   assert.ok(html.includes('recordingDownloadUrl'), 'recording download URL should be tracked for cleanup');
+  assert.ok(html.includes('const spanForCamera = Math.min(span, 4.5)'), 'camera framing should cap span used for distance calculations');
 }
 
 function run() {
@@ -459,6 +500,7 @@ function run() {
   testEndBias();
   testExtractEmphasisToken();
   testParseScriptLines();
+  testWrapScriptSegmentsByWords();
   testParseScriptLinesDefaultFirst();
   testBreakTokensAccumulate();
   testPatchNoiseShaderSources();

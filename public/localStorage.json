@@ -11,6 +11,8 @@
       "curveLookAheadU": 0.045,
       "followLambda": 13.5,
       "lookAtLambda": 9.5,
+      "animationSpeed": 1,
+      "lineStartDelayMs": 140,
       "revealMs": 240,
       "revealStartScale": 1.04,
       "revealPopScale": 1.07,

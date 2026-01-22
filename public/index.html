@@ -439,6 +439,18 @@
     </label>
 
     <label>
+      Animation speed (camera + words): <span id="animSpeedVal">1.00</span>×
+      <input id="animSpeed" type="range" min="0.5" max="1.5" step="0.05" value="1" />
+      <small>Scales how fast words reveal and the camera tracks. Rebuild not required.</small>
+    </label>
+
+    <label>
+      Line start delay (ms): <span id="lineStartDelayVal">140</span>
+      <input id="lineStartDelay" type="range" min="0" max="600" step="20" value="140" />
+      <small>Only used when keepPreviousLinesVisible is off to let the camera settle.</small>
+    </label>
+
+    <label>
       Font preset
       <select id="fontSelect"></select>
     </label>
@@ -511,6 +523,7 @@
       Some iOS browsers may block WebM recording.
       Demo lines load from <code>/public/demo-lines.txt</code> when running the LAN service.
       Script tokens: <code>#A/#B/#C</code> switch profiles, <code>#default</code> resets to base; <code>[PAUSE=ms]</code> / <code>[HOLD=ms]</code> apply to the next line; <code>[BREAK]</code> adds a blank paragraph gap before the next caption.
+      Use the Animation speed slider to scale word reveals + camera follow; Line start delay only applies when keepPreviousLinesVisible is unchecked.
     </div>
   </div>
 </div>
@@ -545,6 +558,8 @@
     cameraDistance: 3.5,
 
     wordsPerSecond:  2.5,
+    animationSpeed: 1,
+    lineStartDelayMs: 140,
     curveLookAheadU: 0.045,
     followLambda:    13.5,
     lookAtLambda:    9.5,
@@ -978,6 +993,10 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
   const renderDownloadEl = document.getElementById('renderDownload');
   const wplEl = document.getElementById('wpl');
   const wplValEl = document.getElementById('wplVal');
+  const animSpeedEl = document.getElementById('animSpeed');
+  const animSpeedValEl = document.getElementById('animSpeedVal');
+  const lineStartDelayEl = document.getElementById('lineStartDelay');
+  const lineStartDelayValEl = document.getElementById('lineStartDelayVal');
   const ohEl = document.getElementById('oh');
   const ohValEl = document.getElementById('ohVal');
   const fontSelect = document.getElementById('fontSelect');
@@ -1006,6 +1025,24 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
 
   wplEl.addEventListener('input', () => {
     wplValEl.textContent = String(wplEl.value);
+    persistState();
+  });
+
+  animSpeedEl.value = String(cfg.animationSpeed ?? DEFAULT_CFG.animationSpeed);
+  animSpeedValEl.textContent = Number(animSpeedEl.value).toFixed(2);
+  animSpeedEl.addEventListener('input', () => {
+    const v = Number(animSpeedEl.value);
+    cfg.animationSpeed = isFinite(v) ? v : DEFAULT_CFG.animationSpeed;
+    animSpeedValEl.textContent = Number(cfg.animationSpeed).toFixed(2);
+    persistState();
+  });
+
+  lineStartDelayEl.value = String(cfg.lineStartDelayMs ?? DEFAULT_CFG.lineStartDelayMs);
+  lineStartDelayValEl.textContent = String(Math.round(Number(lineStartDelayEl.value) || 0));
+  lineStartDelayEl.addEventListener('input', () => {
+    const v = Math.max(0, Number(lineStartDelayEl.value) || 0);
+    cfg.lineStartDelayMs = v;
+    lineStartDelayValEl.textContent = String(Math.round(v));
     persistState();
   });
 
@@ -1356,6 +1393,11 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
     } else {
       wplValEl.textContent = String(wplEl.value);
     }
+
+    animSpeedEl.value = String(cfg.animationSpeed ?? DEFAULT_CFG.animationSpeed);
+    animSpeedValEl.textContent = Number(animSpeedEl.value).toFixed(2);
+    lineStartDelayEl.value = String(cfg.lineStartDelayMs ?? DEFAULT_CFG.lineStartDelayMs);
+    lineStartDelayValEl.textContent = String(Math.round(Number(lineStartDelayEl.value) || 0));
 
     ohEl.value = String(cfg.endOverhangFactor);
     ohValEl.textContent = Number(cfg.endOverhangFactor).toFixed(2);
@@ -1721,13 +1763,19 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
     const n = centers.length;
     if (n === 0) return;
 
+    const delayMs = cfg.keepPreviousLinesVisible ? 0 : Math.max(0, cfg.lineStartDelayMs || 0);
+    const animationTimeSec = computeAnimationTime(currentTimeSec, startTime, {
+      speed: cfg.animationSpeed ?? 1,
+      delayMs,
+    });
+
     const emphasisProfile = getEmphasisProfile();
     const lineProfile = lineObj.profileSettings || getLineProfile(lineObj.profileId);
     const activeRevealStyle = lineObj.revealStyleOverride || lineProfile?.revealStyle || cfg.revealStyle;
     for (const m of meshes) m.userData.revealStyle = activeRevealStyle;
 
     const durationSec = Math.max(0.05, (endTime - startTime));
-    const uRaw = clamp01((currentTimeSec - startTime) / durationSec);
+    const uRaw = clamp01((animationTimeSec - startTime) / durationSec);
     const eased = smooth01(uRaw);
     const u = easeOutEndU(eased);
 
@@ -1743,7 +1791,7 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
     while (idx < lengths.length && lengths[idx] < dist) idx++;
     const denom = Math.max(1, lengths.length - 1);
     const t = idx / denom;
-    const activeIdx = computeActiveWordIndex(Array.isArray(words) && words.length === meshes.length ? words : null, currentTimeSec, uRaw, n);
+    const activeIdx = computeActiveWordIndex(Array.isArray(words) && words.length === meshes.length ? words : null, animationTimeSec, uRaw, n);
     const activeProgress = (typeof activeIdx === 'number' && activeIdx >= 0)
       ? clamp01(activeIdx / Math.max(1, n - 1))
       : 0;
@@ -1786,7 +1834,7 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
 
     if (Array.isArray(words) && words.length === meshes.length) {
       for (let k = 0; k < words.length; k++) {
-        if (currentTimeSec >= Number(words[k].startTime ?? 0)) startReveal(meshes[k], now || performance.now());
+        if (animationTimeSec >= Number(words[k].startTime ?? 0)) startReveal(meshes[k], now || performance.now());
       }
     } else {
       const p = uRaw * (n - 1);
@@ -2017,6 +2065,16 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
     const millis = Math.floor(safe % 1000);
     return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(millis).padStart(3, '0')}`;
   }
+
+  const computeAnimationTime = (window.AnimationHelpers && typeof window.AnimationHelpers.computeAnimationTime === 'function')
+    ? window.AnimationHelpers.computeAnimationTime
+    : function fallbackComputeAnimationTime(currentTimeSec, startTimeSec, { speed = 1, delayMs = 0 } = {}) {
+        const start = Number(startTimeSec) || 0;
+        const safeSpeed = Math.max(0.01, Number(speed) || 1);
+        const delaySec = Math.max(0, Number(delayMs) || 0) / 1000;
+        const rel = (Number(currentTimeSec) || 0) - start - delaySec;
+        return start + (rel * safeSpeed);
+      };
 
   const parseScriptLines = (window.AnimationHelpers && typeof window.AnimationHelpers.parseScriptLines === 'function')
     ? window.AnimationHelpers.parseScriptLines
@@ -3288,6 +3346,8 @@ ${String(err)}`);
     ['color', 'text', 'color', 'hex color (e.g. 0xffffff)'],
     ['cameraDistance', 'number', 'cameraDistance', 'z distance of camera'],
     ['wordsPerSecond', 'number', 'wordsPerSecond', 'fallback speed mode only'],
+    ['animationSpeed', 'number', 'animationSpeed', 'global speed multiplier for camera + words'],
+    ['lineStartDelayMs', 'number', 'lineStartDelayMs', 'delay before word reveal when keepPrev is off'],
     ['curveLookAheadU', 'number', 'curveLookAheadU', '0.01..0.08 recommended'],
     ['followLambda', 'number', 'followLambda', '12 floaty, 35 tight'],
     ['lookAtLambda', 'number', 'lookAtLambda', 'softens look-at easing'],
@@ -3368,6 +3428,10 @@ ${String(err)}`);
       cfg.textAlign = (AnimationHelpers.normalizeTextAlign?.(cfg.textAlign)) || 'center';
 
       keepPrevEl.checked = !!cfg.keepPreviousLinesVisible;
+      animSpeedEl.value = String(cfg.animationSpeed ?? DEFAULT_CFG.animationSpeed);
+      animSpeedValEl.textContent = Number(animSpeedEl.value).toFixed(2);
+      lineStartDelayEl.value = String(cfg.lineStartDelayMs ?? DEFAULT_CFG.lineStartDelayMs);
+      lineStartDelayValEl.textContent = String(Math.round(Number(lineStartDelayEl.value) || 0));
       ohValEl.textContent = Number(cfg.endOverhangFactor).toFixed(2);
       ohEl.value = String(cfg.endOverhangFactor);
       revealStyleSelect.value = cfg.revealStyle;
@@ -3400,6 +3464,10 @@ ${String(err)}`);
       revealStyleSelect.value = cfg.revealStyle;
       textAlignSelect.value = cfg.textAlign;
       emphasisProfileSelect.value = cfg.emphasisProfile;
+      animSpeedEl.value = String(cfg.animationSpeed ?? DEFAULT_CFG.animationSpeed);
+      animSpeedValEl.textContent = Number(animSpeedEl.value).toFixed(2);
+      lineStartDelayEl.value = String(cfg.lineStartDelayMs ?? DEFAULT_CFG.lineStartDelayMs);
+      lineStartDelayValEl.textContent = String(Math.round(Number(lineStartDelayEl.value) || 0));
       ohEl.value = String(cfg.endOverhangFactor);
       ohValEl.textContent = Number(cfg.endOverhangFactor).toFixed(2);
     setStatus('cfg reset to defaults.\n(Rebuild on Replay)');

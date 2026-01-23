@@ -19,6 +19,7 @@ This file applies to the entire repository.
 - Camera framing should keep the active/neighboring words visible: the dynamic FOV/distance framing logic in `public/index.html` must be preserved or improved so highlighted words never drift outside the viewport when spawned.
 - Terminal framing must finish with a right-of-center overhang: preserve the end-overhang blend so the camera clamps toward `maxX + endOverhangPx + endOverhangFactor × lastWidth` instead of re-centering on the final word.
 - Camera glide pacing should follow line-intent segments (punctuation-based when present) instead of per-word target jumps; keep segment easing smooth and time-locked to line duration.
+- Word envelope defaults (overlap/min/max) should stay synced across `public/index.html`, README, and localStorage seeds when smoothing continuous word interpolation.
 - Active word highlighting should remain smooth and readable: keep the per-frame glow/scale smoothing (with softer neighbor glow) so semantic emphasis remains apparent even after the reveal completes.
 - When keep-previous-lines stacking is enabled, use measured line heights to avoid overlap; if stacking is off, completed lines should clear to keep the frame legible. Update README/UI hints when altering this flow.
 - Emphasis visibility relies on semantic bold plus the glow/scale defaults; adjust materials/emphasis values and documentation together so bold words remain visually distinct.

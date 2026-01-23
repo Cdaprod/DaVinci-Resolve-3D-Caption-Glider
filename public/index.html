@@ -523,7 +523,7 @@
       Some iOS browsers may block WebM recording.
       Demo lines load from <code>/public/demo-lines.txt</code> when running the LAN service.
       Script tokens: <code>#A/#B/#C</code> switch profiles, <code>#default</code> resets to base; <code>[PAUSE=ms]</code> / <code>[HOLD=ms]</code> apply to the next line; <code>[BREAK]</code> adds a blank paragraph gap before the next caption.
-      Use the Animation speed slider to scale word reveals + camera follow; Line start delay only applies when keepPreviousLinesVisible is unchecked. Punctuation pacing (comma/sentence/dash pauses) lives in Advanced cfg for smoother intonation in fallback/cue timing.
+      Use the Animation speed slider to scale word reveals + camera follow; Line start delay only applies when keepPreviousLinesVisible is unchecked. Punctuation pacing (comma/sentence/dash pauses) plus word envelope overlap live in Advanced cfg for smoother intonation in fallback/cue timing.
     </div>
   </div>
 </div>
@@ -563,6 +563,9 @@
     commaPauseMs: 120,
     sentencePauseMs: 240,
     dashPauseMs: 140,
+    wordOverlap: 0.22,
+    wordMinMs: 70,
+    wordMaxMs: 320,
     curveLookAheadU: 0.045,
     followLambda:    13.5,
     lookAtLambda:    9.5,
@@ -2220,6 +2223,87 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
 
         return { segments, totalMs: computedTotalMs };
       };
+  const buildWordEnvelopes = (window.AnimationHelpers && typeof window.AnimationHelpers.buildWordEnvelopes === 'function')
+    ? window.AnimationHelpers.buildWordEnvelopes
+    : function fallbackBuildWordEnvelopes(words = [], options = {}) {
+        const {
+          lineStartSec = 0,
+          lineStartMs = 0,
+          lineDurationMs,
+          overlap = 0.22,
+          minWordMs = 70,
+          maxWordMs = 320,
+          punctuationPausesMs = {},
+        } = options || {};
+
+        const safeWords = Array.isArray(words) ? words : [];
+        if (!safeWords.length) return [];
+
+        const hasTiming = safeWords.every((word) => Number.isFinite(Number(word?.startTime)) && Number.isFinite(Number(word?.endTime)));
+        let baseDurations = [];
+
+        if (hasTiming) {
+          baseDurations = safeWords.map((word) => {
+            const start = Number(word.startTime) - Number(lineStartSec || 0);
+            const end = Number(word.endTime) - Number(lineStartSec || 0);
+            return Math.max(0, (end - start) * 1000);
+          });
+        } else {
+          const weights = safeWords.map(word => Math.max(1, String(word?.text || '').replace(/[^\w]/g, '').length || String(word?.text || '').length));
+          const totalWeight = weights.reduce((sum, w) => sum + w, 0) || 1;
+          const targetMs = Math.max(0, Number(lineDurationMs) || 0);
+          const baseUnit = targetMs > 0 ? targetMs / totalWeight : 120;
+          baseDurations = weights.map(weight => weight * baseUnit);
+        }
+
+        const durationsWithPunctuation = baseDurations.map((duration, idx) => {
+          const punctuationClass = classifyTrailingPunctuation(safeWords[idx]?.text || '');
+          const pauseMs = punctuationClass === 'sentence'
+            ? Number(punctuationPausesMs.sentence || 0)
+            : punctuationClass === 'comma'
+              ? Number(punctuationPausesMs.comma || 0)
+              : punctuationClass === 'dash'
+                ? Number(punctuationPausesMs.dash || 0)
+                : 0;
+          return Math.max(0, duration + Math.max(0, pauseMs));
+        });
+
+        const totalNominal = durationsWithPunctuation.reduce((sum, ms) => sum + ms, 0) || 1;
+        const targetDuration = Number.isFinite(Number(lineDurationMs)) ? Math.max(1, Number(lineDurationMs)) : totalNominal;
+        const scaled = durationsWithPunctuation.map((duration) => {
+          const scaledMs = duration * (targetDuration / totalNominal);
+          return Math.max(minWordMs, Math.min(maxWordMs, scaledMs));
+        });
+
+        const scaledTotal = scaled.reduce((sum, ms) => sum + ms, 0) || 1;
+        const finalDurations = scaledTotal > targetDuration
+          ? scaled.map(ms => ms * (targetDuration / scaledTotal))
+          : scaled;
+
+        const envelopes = [];
+        let cursor = Math.max(0, Number(lineStartMs) || 0);
+        for (const duration of finalDurations) {
+          const endMs = cursor + duration;
+          envelopes.push({
+            startMs: cursor,
+            endMs,
+          });
+          const advance = duration * (1 - Math.max(0, Math.min(0.6, overlap)));
+          cursor += advance;
+        }
+
+        const hardEnd = Math.max(0, Number(lineStartMs) || 0) + targetDuration;
+        const lastEnd = envelopes.length ? envelopes[envelopes.length - 1].endMs : hardEnd;
+        if (lastEnd > hardEnd && envelopes.length) {
+          const scale = targetDuration / (lastEnd - (Number(lineStartMs) || 0));
+          for (const env of envelopes) {
+            env.startMs = (Number(lineStartMs) || 0) + (env.startMs - (Number(lineStartMs) || 0)) * scale;
+            env.endMs = (Number(lineStartMs) || 0) + (env.endMs - (Number(lineStartMs) || 0)) * scale;
+          }
+        }
+
+        return envelopes;
+      };
 
   function punctuationPauseMs(wordText = '') {
     const kind = classifyTrailingPunctuation(wordText);
@@ -2246,6 +2330,19 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
       return { ...word, startTime: startMs / 1000, endTime: endMs / 1000 };
     });
     return { timings, totalMs };
+  }
+
+  function buildWordEnvelopeConfig() {
+    return {
+      overlap: Math.max(0, Math.min(0.6, Number(cfg.wordOverlap) || 0)),
+      minWordMs: Math.max(1, Number(cfg.wordMinMs) || 1),
+      maxWordMs: Math.max(1, Number(cfg.wordMaxMs) || 1),
+      punctuationPausesMs: {
+        comma: Math.max(0, Number(cfg.commaPauseMs) || 0),
+        sentence: Math.max(0, Number(cfg.sentencePauseMs) || 0),
+        dash: Math.max(0, Number(cfg.dashPauseMs) || 0),
+      },
+    };
   }
 
   function estimateSegmentDurationMs(words = [], profileSettings) {
@@ -2508,14 +2605,8 @@ ${String(err)}`);
     return valid.includes(id) ? id : 'slide-up';
   }
 
-  function startReveal(mesh, now) {
-    if (mesh.userData.revealed) return;
-
-    mesh.userData.revealed = true;
-    mesh.visible = true;
-    mesh.userData.revealStart = now;
-    mesh.material.opacity = 0;
-
+  function ensureRevealParams(mesh) {
+    if (mesh.userData.revealParams) return;
     const style = normalizeRevealStyle(mesh?.userData?.revealStyle || cfg.revealStyle);
     mesh.userData.revealStyle = style;
 
@@ -2580,6 +2671,18 @@ ${String(err)}`);
     mesh.userData.revealOffsetZ = params.depth;
     mesh.userData.axisXStart = params.axisXStart;
     mesh.userData.axisXEnd = params.axisXEnd;
+  }
+
+  function startReveal(mesh, now) {
+    if (mesh.userData.revealed) return;
+
+    mesh.userData.revealed = true;
+    mesh.visible = true;
+    mesh.userData.revealStart = now;
+    mesh.material.opacity = 0;
+
+    ensureRevealParams(mesh);
+    const params = mesh.userData.revealParams || {};
 
     mesh.scale.set(params.axisXStart, params.startScale, params.startScale);
     mesh.position.set(
@@ -2587,6 +2690,82 @@ ${String(err)}`);
       mesh.userData.basePos.y + params.rise,
       mesh.userData.basePos.z + params.depth
     );
+  }
+
+  function applyRevealProgress(mesh, progress, elapsedMs, durationMs) {
+    ensureRevealParams(mesh);
+    const params = mesh.userData.revealParams || {};
+    const profile = getEmphasisProfile();
+    const t = clamp01(progress);
+    const easeIn = smooth01(t);
+    const opacityEase = easeOutCubic(easeIn);
+
+    const startScale = params.startScale ?? Math.max(1, cfg.revealStartScale);
+    const popScale = params.popScale ?? cfg.revealPopScale;
+    const rise = params.rise ?? 0;
+    const depth = params.depth ?? 0;
+    const axisXStart = params.axisXStart ?? 1;
+    const axisXEnd = params.axisXEnd ?? 1;
+    const style = mesh.userData.revealStyle || cfg.revealStyle;
+
+    const liftEase = easeOutCubic(easeIn);
+    const backEase = easeOutBack(easeIn, Math.max(0, cfg.revealOvershoot || 0));
+    const styleScale = THREE.MathUtils.lerp(startScale, Math.max(startScale, popScale), backEase);
+    const settleScale = THREE.MathUtils.lerp(styleScale, 1, liftEase);
+
+    const elapsed = Math.max(0, Number(elapsedMs) || 0);
+    const emScale = emphasisScaleFor(mesh, elapsed, profile);
+    let uni = settleScale * emScale;
+    let axisX = axisXEnd;
+    let opacity = Math.min(1, (params.opacityFloor ?? 0.1) + opacityEase * (1 - (params.opacityFloor ?? 0.1)));
+
+    if (style === 'word-fade') {
+      uni = emScale;
+      axisX = 1;
+      opacity = opacityEase;
+    } else if (style === 'fade-scale') {
+      uni = THREE.MathUtils.lerp(startScale, 1, liftEase) * emScale;
+      axisX = THREE.MathUtils.lerp(axisXStart, axisXEnd, liftEase);
+      opacity = opacityEase;
+    } else if (style === 'char-fade') {
+      const chars = Math.max(1, mesh.userData.wordLength || 1);
+      const charPhase = clamp01(easeIn * chars);
+      axisX = THREE.MathUtils.lerp(axisXStart, axisXEnd, charPhase);
+      opacity = charPhase;
+      uni = emScale;
+    } else if (style === 'typewriter') {
+      const chars = Math.max(1, mesh.userData.wordLength || 1);
+      const charPhase = clamp01(easeIn * chars);
+      axisX = THREE.MathUtils.lerp(axisXStart, axisXEnd, charPhase);
+      opacity = Math.max(params.opacityFloor ?? 0.05, charPhase);
+    }
+
+    if (t <= 0) {
+      mesh.visible = false;
+      mesh.material.opacity = 0;
+      mesh.scale.setScalar(1);
+      mesh.position.copy(mesh.userData.basePos);
+      mesh.userData.revealStart = 0;
+      return;
+    }
+
+    mesh.visible = true;
+    mesh.material.opacity = opacity;
+    mesh.scale.set(axisX * emScale, uni, uni);
+    mesh.position.set(
+      mesh.userData.basePos.x,
+      mesh.userData.basePos.y + rise * (1 - liftEase),
+      mesh.userData.basePos.z + depth * (1 - liftEase)
+    );
+
+    if (t >= 1) {
+      mesh.userData.revealStart = null;
+      mesh.material.opacity = 1;
+      mesh.scale.setScalar(emphasisScaleFor(mesh, (durationMs || cfg.revealMs) + (profile?.emphasisSettleMs ?? 0), profile));
+      mesh.position.copy(mesh.userData.basePos);
+    } else {
+      mesh.userData.revealStart = 0;
+    }
   }
 
   function tickReveal(mesh, now) {
@@ -2819,6 +2998,7 @@ ${String(err)}`);
     const lineProfile = lineObj.profileSettings || getLineProfile(lineObj.profileId);
     const activeRevealStyle = lineObj.revealStyleOverride || lineProfile?.revealStyle || cfg.revealStyle;
     const timingWords = Array.isArray(words) && words.length === n ? words : null;
+    const wordEnvelopes = Array.isArray(lineObj.wordEnvelopes) && lineObj.wordEnvelopes.length === n ? lineObj.wordEnvelopes : null;
 
     for (const m of meshes) {
       m.visible = false;
@@ -2904,17 +3084,26 @@ ${String(err)}`);
       targetX = damp(targetX, target.x, targetLambda, dt);
       targetY = damp(targetY, target.y, targetLambda, dt);
 
-      if (timingWords) {
+      if (wordEnvelopes) {
+        for (let k = 0; k < meshes.length; k++) {
+          const env = wordEnvelopes[k];
+          if (!env) continue;
+          const duration = Math.max(1, env.endMs - env.startMs);
+          const localElapsed = elapsed - env.startMs;
+          const progress = duration > 0 ? localElapsed / duration : 1;
+          applyRevealProgress(meshes[k], progress, localElapsed, duration);
+        }
+      } else if (timingWords) {
         for (let k = 0; k < timingWords.length; k++) {
           if (currentTime >= Number(timingWords[k].startTime ?? 0)) startReveal(meshes[k], now);
         }
+        for (const m of meshes) tickReveal(m, now);
       } else {
         const p = uRaw * (n - 1);
         const revealIdx = Math.min(n - 1, Math.floor(p + cfg.revealWordLead));
         for (let k = 0; k <= revealIdx; k++) startReveal(meshes[k], now);
+        for (const m of meshes) tickReveal(m, now);
       }
-
-      for (const m of meshes) tickReveal(m, now);
 
       updateActiveHighlight(meshes, activeIdx, emphasisProfile, dt);
 
@@ -2971,6 +3160,7 @@ ${String(err)}`);
     const lineProfile = lineObj.profileSettings || getLineProfile(lineObj.profileId);
     const activeRevealStyle = lineObj.revealStyleOverride || lineProfile?.revealStyle || cfg.revealStyle;
     const fallbackWords = Array.isArray(lineObj.wordTimings) && lineObj.wordTimings.length ? lineObj.wordTimings : null;
+    const wordEnvelopes = Array.isArray(lineObj.wordEnvelopes) && lineObj.wordEnvelopes.length === n ? lineObj.wordEnvelopes : null;
 
     for (const m of meshes) {
       m.visible = false;
@@ -3058,17 +3248,26 @@ ${String(err)}`);
       targetX = damp(targetX, target.x, targetLambda, dt);
       targetY = damp(targetY, target.y, targetLambda, dt);
 
-      if (fallbackWords) {
+      if (wordEnvelopes) {
+        for (let k = 0; k < meshes.length; k++) {
+          const env = wordEnvelopes[k];
+          if (!env) continue;
+          const duration = Math.max(1, env.endMs - env.startMs);
+          const localElapsed = elapsed - env.startMs;
+          const progress = duration > 0 ? localElapsed / duration : 1;
+          applyRevealProgress(meshes[k], progress, localElapsed, duration);
+        }
+      } else if (fallbackWords) {
         for (let k = 0; k < fallbackWords.length; k++) {
           if (currentTimeSec >= Number(fallbackWords[k].startTime ?? 0)) startReveal(meshes[k], now);
         }
+        for (const m of meshes) tickReveal(m, now);
       } else {
         const p = uRaw * (n - 1);
         const revealIdx = Math.min(n - 1, Math.floor(p + revealWordLead));
         for (let k = 0; k <= revealIdx; k++) startReveal(meshes[k], now);
+        for (const m of meshes) tickReveal(m, now);
       }
-
-      for (const m of meshes) tickReveal(m, now);
 
       updateActiveHighlight(meshes, activeIdx, emphasisProfile, dt);
 
@@ -3293,6 +3492,12 @@ ${String(err)}`);
         ? Math.max(0, (obj.endTime - obj.startTime) * 1000)
         : 0;
       obj.durationMs = Math.max(50, durationMs);
+      obj.wordEnvelopes = buildWordEnvelopes(obj.words || obj.normalizedWords || [], {
+        lineStartSec: Number(obj.startTime) || 0,
+        lineStartMs: 0,
+        lineDurationMs: obj.durationMs,
+        ...buildWordEnvelopeConfig(),
+      });
       lineObjs.push(obj);
     }
 
@@ -3318,6 +3523,11 @@ ${String(err)}`);
       const fallback = buildFallbackWordTimings(obj.normalizedWords || [], obj.profileSettings);
       obj.wordTimings = fallback.timings;
       obj.durationMs = Math.max(300, fallback.totalMs);
+      obj.wordEnvelopes = buildWordEnvelopes(obj.normalizedWords || [], {
+        lineStartMs: 0,
+        lineDurationMs: obj.durationMs,
+        ...buildWordEnvelopeConfig(),
+      });
 
       lineObjs.push(obj);
     }
@@ -3477,6 +3687,9 @@ ${String(err)}`);
     ['commaPauseMs', 'number', 'commaPauseMs', 'extra pause after commas/semicolons (fallback/cues)'],
     ['sentencePauseMs', 'number', 'sentencePauseMs', 'extra pause after sentence-ending punctuation'],
     ['dashPauseMs', 'number', 'dashPauseMs', 'extra pause after em dash/dash'],
+    ['wordOverlap', 'number', 'wordOverlap', 'fractional overlap between word envelopes'],
+    ['wordMinMs', 'number', 'wordMinMs', 'minimum ms per word envelope'],
+    ['wordMaxMs', 'number', 'wordMaxMs', 'maximum ms per word envelope'],
     ['animationSpeed', 'number', 'animationSpeed', 'global speed multiplier for camera + words'],
     ['lineStartDelayMs', 'number', 'lineStartDelayMs', 'delay before word reveal when keepPrev is off'],
     ['curveLookAheadU', 'number', 'curveLookAheadU', '0.01..0.08 recommended'],

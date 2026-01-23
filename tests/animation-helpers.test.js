@@ -29,6 +29,7 @@ const {
   buildCueWordTimings,
   classifyTrailingPunctuation,
   buildLineCameraSegments,
+  buildWordEnvelopes,
   computeAnimationTime,
   patchNoiseShaderSources,
 } = require('../public/animation-helpers');
@@ -427,6 +428,41 @@ function testBuildLineCameraSegmentsNoInternalPunctuation() {
   });
 }
 
+function testBuildWordEnvelopesOverlapAndClamp() {
+  const words = [
+    { text: 'Short' },
+    { text: 'line,' },
+    { text: 'here.' },
+  ];
+  const envelopes = buildWordEnvelopes(words, {
+    lineDurationMs: 900,
+    overlap: 0.3,
+    minWordMs: 80,
+    maxWordMs: 400,
+    punctuationPausesMs: { comma: 120, sentence: 180, dash: 0 },
+  });
+  assert.strictEqual(envelopes.length, 3);
+  assert(envelopes[1].startMs < envelopes[0].endMs, 'overlap should start next word before previous ends');
+  assert(envelopes[2].endMs <= 900, 'envelopes should fit inside line duration');
+}
+
+function testBuildWordEnvelopesWithTiming() {
+  const words = [
+    { text: 'Timed', startTime: 5.0, endTime: 5.2 },
+    { text: 'words', startTime: 5.2, endTime: 5.5 },
+  ];
+  const envelopes = buildWordEnvelopes(words, {
+    lineStartSec: 5.0,
+    lineDurationMs: 600,
+    overlap: 0.2,
+    minWordMs: 50,
+    maxWordMs: 500,
+  });
+  assert.strictEqual(envelopes.length, 2);
+  assert(envelopes[0].startMs === 0);
+  assert(envelopes[1].endMs <= 600);
+}
+
 function testSeedFilesAreCleanObjects() {
   const seeds = [
     path.join(__dirname, '..', 'public', 'localStorage.json'),
@@ -524,6 +560,8 @@ function run() {
   testClassifyTrailingPunctuation();
   testBuildLineCameraSegments();
   testBuildLineCameraSegmentsNoInternalPunctuation();
+  testBuildWordEnvelopesOverlapAndClamp();
+  testBuildWordEnvelopesWithTiming();
   testSeedFilesAreCleanObjects();
   testSeedThemesMatchPalettes();
   testRecordingUiHooked();

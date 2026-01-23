@@ -28,9 +28,11 @@ const {
   lineAlignmentOffset,
   parseSrtCues,
   buildCueWordTimings,
+  buildTimedLinesFromTranscript,
   computeAnimationTime,
   applyFlipScalar,
   applyFlipScalarLog,
+  clampRangeValue,
   patchNoiseShaderSources,
 } = require('../public/animation-helpers');
 
@@ -110,6 +112,13 @@ function testApplyFlipScalarLog() {
 
   const settled = applyFlipScalarLog(initial.value, 1, initial.flip, 8, 0.5);
   assert(settled.value < initial.value, 'log flip should settle scale toward target');
+}
+
+function testClampRangeValue() {
+  assert.strictEqual(clampRangeValue('bad', { min: 1, max: 4, fallback: 2 }), 2);
+  assert.strictEqual(clampRangeValue(0, { min: 1, max: 4, fallback: 2 }), 1);
+  assert.strictEqual(clampRangeValue(5, { min: 1, max: 4, fallback: 2 }), 4);
+  assert.strictEqual(clampRangeValue(3, { min: 1, max: 4, fallback: 2 }), 3);
 }
 
 function testExtractEmphasisToken() {
@@ -419,6 +428,27 @@ function testBuildCueWordTimings() {
   assert(words[1].endTime <= 1);
 }
 
+function testBuildTimedLinesFromTranscript() {
+  const wordEntries = [
+    { text: 'Now', startTime: 0, endTime: 0.2 },
+    { text: 'you', startTime: 0.2, endTime: 0.4 },
+    { text: 'see', startTime: 0.4, endTime: 0.6 },
+  ];
+  const grouped = buildTimedLinesFromTranscript(wordEntries, 2);
+  assert.strictEqual(grouped.length, 2);
+  assert.strictEqual(grouped[0].text, 'Now you');
+  assert.strictEqual(grouped[0].words.length, 2);
+
+  const lineEntries = [
+    { text: 'Now you see', startTime: 0, endTime: 1 },
+    { text: 'the pattern', startTime: 1, endTime: 2 },
+  ];
+  const lineGrouped = buildTimedLinesFromTranscript(lineEntries, 2);
+  assert.strictEqual(lineGrouped.length, 2);
+  assert.strictEqual(lineGrouped[0].text, 'Now you see');
+  assert.strictEqual(lineGrouped[0].words.length, 3);
+}
+
 function testSeedFilesAreCleanObjects() {
   const seeds = [
     path.join(__dirname, '..', 'public', 'localStorage.json'),
@@ -497,6 +527,7 @@ function run() {
   testComputeAnimationTime();
   testApplyFlipScalar();
   testApplyFlipScalarLog();
+  testClampRangeValue();
   testEndBias();
   testExtractEmphasisToken();
   testParseScriptLines();
@@ -516,6 +547,7 @@ function run() {
   testNormalizePersistedPayload();
   testParseSrtCues();
   testBuildCueWordTimings();
+  testBuildTimedLinesFromTranscript();
   testSeedFilesAreCleanObjects();
   testSeedThemesMatchPalettes();
   testRecordingUiHooked();

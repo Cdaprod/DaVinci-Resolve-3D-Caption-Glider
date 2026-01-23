@@ -27,6 +27,7 @@ const {
   lineAlignmentOffset,
   parseSrtCues,
   buildCueWordTimings,
+  classifyTrailingPunctuation,
   computeAnimationTime,
   patchNoiseShaderSources,
 } = require('../public/animation-helpers');
@@ -361,6 +362,26 @@ function testBuildCueWordTimings() {
   assert(words[1].endTime <= 1);
 }
 
+function testBuildCueWordTimingsPunctuation() {
+  const words = buildCueWordTimings('Hello, world.', 0, 2000, {
+    punctuationPausesMs: { comma: 180, sentence: 260, dash: 120 },
+  });
+  assert.strictEqual(words.length, 2);
+  const firstDuration = words[0].endTime - words[0].startTime;
+  const secondDuration = words[1].endTime - words[1].startTime;
+  assert(secondDuration > firstDuration, 'sentence pause should elongate the terminal word');
+  assert.strictEqual(Number(words[0].startTime.toFixed(3)), 0);
+  assert.strictEqual(Number(words[1].endTime.toFixed(3)), 2);
+}
+
+function testClassifyTrailingPunctuation() {
+  assert.strictEqual(classifyTrailingPunctuation('wait...'), 'sentence');
+  assert.strictEqual(classifyTrailingPunctuation('sure?'), 'sentence');
+  assert.strictEqual(classifyTrailingPunctuation('pause,'), 'comma');
+  assert.strictEqual(classifyTrailingPunctuation('dash—'), 'dash');
+  assert.strictEqual(classifyTrailingPunctuation('clean'), null);
+}
+
 function testSeedFilesAreCleanObjects() {
   const seeds = [
     path.join(__dirname, '..', 'public', 'localStorage.json'),
@@ -454,6 +475,8 @@ function run() {
   testNormalizePersistedPayload();
   testParseSrtCues();
   testBuildCueWordTimings();
+  testBuildCueWordTimingsPunctuation();
+  testClassifyTrailingPunctuation();
   testSeedFilesAreCleanObjects();
   testSeedThemesMatchPalettes();
   testRecordingUiHooked();

@@ -216,7 +216,17 @@
     return cues;
   }
 
-  function buildCueWordTimings(text = '', startMs = 0, endMs = 0) {
+  function classifyTrailingPunctuation(wordText = '') {
+    const text = String(wordText || '').trim();
+    if (!text) return null;
+    if (/[.?!…]+$/.test(text)) return 'sentence';
+    if (/[,;:]+$/.test(text)) return 'comma';
+    if (/[-—]+$/.test(text)) return 'dash';
+    return null;
+  }
+
+  function buildCueWordTimings(text = '', startMs = 0, endMs = 0, options = {}) {
+    const { punctuationPausesMs = {} } = options || {};
     const tokens = String(text || '').split(/\s+/).filter(Boolean);
     if (!tokens.length) return [];
     const duration = Math.max(0, Number(endMs) - Number(startMs));
@@ -230,11 +240,26 @@
 
     const weights = tokens.map(token => Math.max(1, token.replace(/[^\w]/g, '').length || token.length));
     const totalWeight = weights.reduce((sum, w) => sum + w, 0) || tokens.length;
+    const baseUnit = totalWeight > 0 ? duration / totalWeight : 0;
+    const rawDurations = tokens.map((token, idx) => {
+      const base = weights[idx] * baseUnit;
+      const punctuationClass = classifyTrailingPunctuation(token);
+      const pauseMs = punctuationClass === 'sentence'
+        ? Number(punctuationPausesMs.sentence || 0)
+        : punctuationClass === 'comma'
+          ? Number(punctuationPausesMs.comma || 0)
+          : punctuationClass === 'dash'
+            ? Number(punctuationPausesMs.dash || 0)
+            : 0;
+      return Math.max(0, base + Math.max(0, pauseMs));
+    });
+    const totalRaw = rawDurations.reduce((sum, value) => sum + value, 0) || duration;
+    const scale = totalRaw > 0 ? duration / totalRaw : 1;
     let cursor = Number(startMs);
     const words = [];
 
     for (let i = 0; i < tokens.length; i++) {
-      const slice = (weights[i] / totalWeight) * duration;
+      const slice = rawDurations[i] * scale;
       const wordStart = cursor;
       const wordEnd = (i === tokens.length - 1) ? Number(endMs) : cursor + slice;
       words.push({
@@ -472,6 +497,7 @@
     stripControlTokens,
     parseSrtCues,
     buildCueWordTimings,
+    classifyTrailingPunctuation,
     normalizeProfileToken,
     normalizeTextAlign,
     lineAlignmentOffset,

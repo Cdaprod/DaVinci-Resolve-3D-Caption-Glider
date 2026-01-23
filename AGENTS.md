@@ -22,6 +22,7 @@ This file applies to the entire repository.
 - When keep-previous-lines stacking is enabled, use measured line heights to avoid overlap; if stacking is off, completed lines should clear to keep the frame legible. Update README/UI hints when altering this flow.
 - Emphasis visibility relies on semantic bold plus the glow/scale defaults; adjust materials/emphasis values and documentation together so bold words remain visually distinct.
 - Reveal styles are enumerated (slide-up, grow-up, bloom, fade-scale, word-fade, char-fade, typewriter); keep the dropdown, defaults, and seed values in sync, and normalize legacy `rise` to `slide-up` for backward compatibility.
+- Punctuation pacing defaults (comma/sentence/dash pauses) should stay synced across `public/index.html`, README, and localStorage seeds when tuning fallback/cue timing.
 - The shared lighting rig lives in `public/lighting-rig.js` and is tested; adjust light/material specs there and keep the rig tests in sync when retuning shading or palette-dependent behavior.
 - The lighting rig now anchors key/fill lights to the scene and lifts near-black text colors for readability; keep palette updates and the rig tests aligned when tuning emissive/roughness values.
 - Text geometry uses `buildTextGeometrySpec` (in `public/animation-helpers.js`) to increase curve segments and add a subtle bevel for deeper extrusions; keep geometry defaults and helper tests aligned when retuning textDepth behavior.

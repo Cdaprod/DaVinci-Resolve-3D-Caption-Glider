@@ -523,7 +523,7 @@
       Some iOS browsers may block WebM recording.
       Demo lines load from <code>/public/demo-lines.txt</code> when running the LAN service.
       Script tokens: <code>#A/#B/#C</code> switch profiles, <code>#default</code> resets to base; <code>[PAUSE=ms]</code> / <code>[HOLD=ms]</code> apply to the next line; <code>[BREAK]</code> adds a blank paragraph gap before the next caption.
-      Use the Animation speed slider to scale word reveals + camera follow; Line start delay only applies when keepPreviousLinesVisible is unchecked.
+      Use the Animation speed slider to scale word reveals + camera follow; Line start delay only applies when keepPreviousLinesVisible is unchecked. Punctuation pacing (comma/sentence/dash pauses) lives in Advanced cfg for smoother intonation in fallback/cue timing.
     </div>
   </div>
 </div>
@@ -560,6 +560,9 @@
     wordsPerSecond:  2.5,
     animationSpeed: 1,
     lineStartDelayMs: 140,
+    commaPauseMs: 120,
+    sentencePauseMs: 240,
+    dashPauseMs: 140,
     curveLookAheadU: 0.045,
     followLambda:    13.5,
     lookAtLambda:    9.5,
@@ -1935,7 +1938,13 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
       const normalized = cues.map((cue) => {
         const startMs = Number(cue.startMs ?? 0);
         const endMs = Number(cue.endMs ?? startMs);
-        const words = AnimationHelpers.buildCueWordTimings?.(cue.text || '', startMs, endMs) || [];
+        const words = AnimationHelpers.buildCueWordTimings?.(cue.text || '', startMs, endMs, {
+          punctuationPausesMs: {
+            comma: Math.max(0, Number(cfg.commaPauseMs) || 0),
+            sentence: Math.max(0, Number(cfg.sentencePauseMs) || 0),
+            dash: Math.max(0, Number(cfg.dashPauseMs) || 0),
+          },
+        }) || [];
         return {
           text: String(cue.text || '').trim(),
           startTime: startMs / 1000,
@@ -2141,12 +2150,50 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
     return LINE_PROFILE_PRESETS[profileId] || LINE_PROFILE_PRESETS[DEFAULT_LINE_PROFILE_ID];
   }
 
-  function estimateSegmentDurationMs(wordCount, punctuationCount, profileSettings) {
+  const classifyTrailingPunctuation = (window.AnimationHelpers && typeof window.AnimationHelpers.classifyTrailingPunctuation === 'function')
+    ? window.AnimationHelpers.classifyTrailingPunctuation
+    : function fallbackClassifyTrailingPunctuation(wordText = '') {
+        const text = String(wordText || '').trim();
+        if (!text) return null;
+        if (/[.?!…]+$/.test(text)) return 'sentence';
+        if (/[,;:]+$/.test(text)) return 'comma';
+        if (/[-—]+$/.test(text)) return 'dash';
+        return null;
+      };
+
+  function punctuationPauseMs(wordText = '') {
+    const kind = classifyTrailingPunctuation(wordText);
+    if (kind === 'sentence') return Math.max(0, Number(cfg.sentencePauseMs) || 0);
+    if (kind === 'comma') return Math.max(0, Number(cfg.commaPauseMs) || 0);
+    if (kind === 'dash') return Math.max(0, Number(cfg.dashPauseMs) || 0);
+    return 0;
+  }
+
+  function buildFallbackWordTimings(words = [], profileSettings) {
+    const safeWords = Array.isArray(words) ? words : [];
+    if (!safeWords.length) return { timings: [], totalMs: 0 };
     const pace = Math.max(0.01, profileSettings?.speedMultiplier ?? 1);
     const wordsPerSec = Math.max(0.1, cfg.wordsPerSecond * pace);
-    const baseMs = wordCount > 0 ? (wordCount / wordsPerSec) * 1000 : 0;
-    const punctuationMs = Math.max(0, (punctuationCount || 0) * 90);
-    return Math.max(300, baseMs + punctuationMs);
+    const baseWordMs = 1000 / wordsPerSec;
+    const rawDurations = safeWords.map(word => Math.max(0, baseWordMs + punctuationPauseMs(word?.text || '')));
+    const totalMs = rawDurations.reduce((sum, value) => sum + value, 0);
+    let cursor = 0;
+    const timings = safeWords.map((word, idx) => {
+      const slice = rawDurations[idx];
+      const startMs = cursor;
+      const endMs = (idx === safeWords.length - 1) ? totalMs : cursor + slice;
+      cursor = endMs;
+      return { ...word, startTime: startMs / 1000, endTime: endMs / 1000 };
+    });
+    return { timings, totalMs };
+  }
+
+  function estimateSegmentDurationMs(words = [], profileSettings) {
+    const safeWords = Array.isArray(words) ? words : [];
+    const wordCount = safeWords.length;
+    if (!wordCount) return 300;
+    const { totalMs } = buildFallbackWordTimings(safeWords, profileSettings);
+    return Math.max(300, totalMs);
   }
   function render() { renderer.render(scene, camera); }
 
@@ -2856,6 +2903,7 @@ ${String(err)}`);
     const emphasisProfile = getEmphasisProfile();
     const lineProfile = lineObj.profileSettings || getLineProfile(lineObj.profileId);
     const activeRevealStyle = lineObj.revealStyleOverride || lineProfile?.revealStyle || cfg.revealStyle;
+    const fallbackWords = Array.isArray(lineObj.wordTimings) && lineObj.wordTimings.length ? lineObj.wordTimings : null;
 
     for (const m of meshes) {
       m.visible = false;
@@ -2907,7 +2955,8 @@ ${String(err)}`);
       const eased = smooth01(uRaw);
       const u = easeOutEndU(eased);
 
-      const activeIdx = computeActiveWordIndex(null, 0, uRaw, n);
+      const currentTimeSec = elapsed / 1000;
+      const activeIdx = computeActiveWordIndex(fallbackWords, currentTimeSec, uRaw, n);
       const dist = u * totalLen;
       let idx = 0;
       while (idx < lengths.length && lengths[idx] < dist) idx++;
@@ -2936,9 +2985,15 @@ ${String(err)}`);
       targetX = damp(targetX, target.x, targetLambda, dt);
       targetY = damp(targetY, target.y, targetLambda, dt);
 
-      const p = uRaw * (n - 1);
-      const revealIdx = Math.min(n - 1, Math.floor(p + revealWordLead));
-      for (let k = 0; k <= revealIdx; k++) startReveal(meshes[k], now);
+      if (fallbackWords) {
+        for (let k = 0; k < fallbackWords.length; k++) {
+          if (currentTimeSec >= Number(fallbackWords[k].startTime ?? 0)) startReveal(meshes[k], now);
+        }
+      } else {
+        const p = uRaw * (n - 1);
+        const revealIdx = Math.min(n - 1, Math.floor(p + revealWordLead));
+        for (let k = 0; k <= revealIdx; k++) startReveal(meshes[k], now);
+      }
 
       for (const m of meshes) tickReveal(m, now);
 
@@ -3187,9 +3242,9 @@ ${String(err)}`);
 
       obj.group.userData.paragraphBreaks = obj.paragraphBreaks;
 
-      const punctuationCount = (seg.text.match(/[.,;:!?…—-]/g) || []).length;
-      const wordCount = obj.normalizedWords?.length ?? 0;
-      obj.durationMs = estimateSegmentDurationMs(wordCount, punctuationCount, obj.profileSettings);
+      const fallback = buildFallbackWordTimings(obj.normalizedWords || [], obj.profileSettings);
+      obj.wordTimings = fallback.timings;
+      obj.durationMs = Math.max(300, fallback.totalMs);
 
       lineObjs.push(obj);
     }
@@ -3346,6 +3401,9 @@ ${String(err)}`);
     ['color', 'text', 'color', 'hex color (e.g. 0xffffff)'],
     ['cameraDistance', 'number', 'cameraDistance', 'z distance of camera'],
     ['wordsPerSecond', 'number', 'wordsPerSecond', 'fallback speed mode only'],
+    ['commaPauseMs', 'number', 'commaPauseMs', 'extra pause after commas/semicolons (fallback/cues)'],
+    ['sentencePauseMs', 'number', 'sentencePauseMs', 'extra pause after sentence-ending punctuation'],
+    ['dashPauseMs', 'number', 'dashPauseMs', 'extra pause after em dash/dash'],
     ['animationSpeed', 'number', 'animationSpeed', 'global speed multiplier for camera + words'],
     ['lineStartDelayMs', 'number', 'lineStartDelayMs', 'delay before word reveal when keepPrev is off'],
     ['curveLookAheadU', 'number', 'curveLookAheadU', '0.01..0.08 recommended'],

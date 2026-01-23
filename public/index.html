@@ -523,7 +523,7 @@
       Some iOS browsers may block WebM recording.
       Demo lines load from <code>/public/demo-lines.txt</code> when running the LAN service.
       Script tokens: <code>#A/#B/#C</code> switch profiles, <code>#default</code> resets to base; <code>[PAUSE=ms]</code> / <code>[HOLD=ms]</code> apply to the next line; <code>[BREAK]</code> adds a blank paragraph gap before the next caption.
-      Use the Animation speed slider to scale word reveals + camera follow; Line start delay only applies when keepPreviousLinesVisible is unchecked. Punctuation pacing (comma/sentence/dash pauses) plus word envelope overlap live in Advanced cfg for smoother intonation in fallback/cue timing.
+      Use the Animation speed slider to scale word reveals + camera follow; Line start delay only applies when keepPreviousLinesVisible is unchecked. Punctuation pacing (comma/sentence/dash pauses), word envelope overlap, and baseline fade controls live in Advanced cfg for smoother intonation in fallback/cue timing.
     </div>
   </div>
 </div>
@@ -566,6 +566,9 @@
     wordOverlap: 0.22,
     wordMinMs: 70,
     wordMaxMs: 320,
+    fadeStart: 0.02,
+    fadeEnd: 0.34,
+    opacityGamma: 1.0,
     curveLookAheadU: 0.045,
     followLambda:    13.5,
     lookAtLambda:    9.5,
@@ -2223,6 +2226,16 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
 
         return { segments, totalMs: computedTotalMs };
       };
+  const baselineFade = (window.AnimationHelpers && typeof window.AnimationHelpers.baselineFade === 'function')
+    ? window.AnimationHelpers.baselineFade
+    : function fallbackBaselineFade(p, fadeStart = 0.02, fadeEnd = 0.34, gamma = 1) {
+        const start = Math.max(0, Number(fadeStart) || 0);
+        const end = Math.max(start + 1e-3, Number(fadeEnd) || 0);
+        const t = clamp01((clamp01(p) - start) / (end - start));
+        const eased = t * t * (3 - 2 * t);
+        const safe = Math.max(0.0001, Number(gamma) || 1);
+        return Math.pow(clamp01(eased), safe);
+      };
   const buildWordEnvelopes = (window.AnimationHelpers && typeof window.AnimationHelpers.buildWordEnvelopes === 'function')
     ? window.AnimationHelpers.buildWordEnvelopes
     : function fallbackBuildWordEnvelopes(words = [], options = {}) {
@@ -2342,6 +2355,14 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
         sentence: Math.max(0, Number(cfg.sentencePauseMs) || 0),
         dash: Math.max(0, Number(cfg.dashPauseMs) || 0),
       },
+    };
+  }
+
+  function buildFadeConfig() {
+    return {
+      fadeStart: Math.max(0, Number(cfg.fadeStart) || 0),
+      fadeEnd: Math.max(0, Number(cfg.fadeEnd) || 0),
+      opacityGamma: Math.max(0.0001, Number(cfg.opacityGamma) || 1),
     };
   }
 
@@ -2699,6 +2720,8 @@ ${String(err)}`);
     const t = clamp01(progress);
     const easeIn = smooth01(t);
     const opacityEase = easeOutCubic(easeIn);
+    const fadeCfg = buildFadeConfig();
+    const baseAlpha = baselineFade(t, fadeCfg.fadeStart, fadeCfg.fadeEnd, fadeCfg.opacityGamma);
 
     const startScale = params.startScale ?? Math.max(1, cfg.revealStartScale);
     const popScale = params.popScale ?? cfg.revealPopScale;
@@ -2750,7 +2773,7 @@ ${String(err)}`);
     }
 
     mesh.visible = true;
-    mesh.material.opacity = opacity;
+    mesh.material.opacity = clamp01(opacity) * baseAlpha;
     mesh.scale.set(axisX * emScale, uni, uni);
     mesh.position.set(
       mesh.userData.basePos.x,
@@ -2779,6 +2802,8 @@ ${String(err)}`);
     const easeIn = smooth01(t);
     const params = mesh.userData.revealParams || {};
     const opacityEase = easeOutCubic(easeIn);
+    const fadeCfg = buildFadeConfig();
+    const baseAlpha = baselineFade(t, fadeCfg.fadeStart, fadeCfg.fadeEnd, fadeCfg.opacityGamma);
 
     const startScale = params.startScale ?? Math.max(1, cfg.revealStartScale);
     const popScale = params.popScale ?? cfg.revealPopScale;
@@ -2825,7 +2850,7 @@ ${String(err)}`);
       opacity = Math.max(params.opacityFloor ?? 0.05, charPhase);
     }
 
-    mesh.material.opacity = opacity;
+    mesh.material.opacity = clamp01(opacity) * baseAlpha;
 
     mesh.scale.set(axisX * emScale, uni, uni);
 
@@ -3690,6 +3715,9 @@ ${String(err)}`);
     ['wordOverlap', 'number', 'wordOverlap', 'fractional overlap between word envelopes'],
     ['wordMinMs', 'number', 'wordMinMs', 'minimum ms per word envelope'],
     ['wordMaxMs', 'number', 'wordMaxMs', 'maximum ms per word envelope'],
+    ['fadeStart', 'number', 'fadeStart', 'baseline fade start (0..1)'],
+    ['fadeEnd', 'number', 'fadeEnd', 'baseline fade end (0..1)'],
+    ['opacityGamma', 'number', 'opacityGamma', 'gamma applied to baseline fade'],
     ['animationSpeed', 'number', 'animationSpeed', 'global speed multiplier for camera + words'],
     ['lineStartDelayMs', 'number', 'lineStartDelayMs', 'delay before word reveal when keepPrev is off'],
     ['curveLookAheadU', 'number', 'curveLookAheadU', '0.01..0.08 recommended'],

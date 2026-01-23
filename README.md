@@ -53,7 +53,7 @@ UI additions:
 
 Edit the `cfg` object in `public/index.html` (or use the built-in configuration drawer) to tune fonts, spacing, reveal style, alignment, emphasis profiles, and typography presets sourced from `docs/TYPOGRAPHY.md`. New UI selections persist to `captioner_state_v1` in localStorage and the seeded `public/localStorage.json` files.
 
-Animation controls include the global `animationSpeed` multiplier (scales word reveals + camera tracking), `lineStartDelayMs` (adds a short pre-roll when `keepPreviousLinesVisible` is off so the camera can settle before words begin), punctuation pacing (`commaPauseMs`, `sentencePauseMs`, `dashPauseMs`) to add natural pauses between commas and sentence endings in fallback/cue timing, and envelope controls (`wordOverlap`, `wordMinMs`, `wordMaxMs`) to smooth continuous word interpolation.
+Animation controls include the global `animationSpeed` multiplier (scales word reveals + camera tracking), `lineStartDelayMs` (adds a short pre-roll when `keepPreviousLinesVisible` is off so the camera can settle before words begin), punctuation pacing (`commaPauseMs`, `sentencePauseMs`, `dashPauseMs`) to add natural pauses between commas and sentence endings in fallback/cue timing, envelope controls (`wordOverlap`, `wordMinMs`, `wordMaxMs`) to smooth continuous word interpolation, and baseline fade tuning (`fadeStart`, `fadeEnd`, `opacityGamma`) to remove reveal snapping.
 
 Default demo lines load from `/public/demo-lines.txt` when the FastAPI service is running (so the UI works correctly in Docker deployments).
 

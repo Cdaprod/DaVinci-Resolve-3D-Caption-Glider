@@ -30,6 +30,7 @@ const {
   classifyTrailingPunctuation,
   buildLineCameraSegments,
   buildWordEnvelopes,
+  baselineFade,
   computeAnimationTime,
   patchNoiseShaderSources,
 } = require('../public/animation-helpers');
@@ -463,6 +464,17 @@ function testBuildWordEnvelopesWithTiming() {
   assert(envelopes[1].endMs <= 600);
 }
 
+function testBaselineFade() {
+  const start = baselineFade(0.0, 0.1, 0.4, 1);
+  const mid = baselineFade(0.2, 0.1, 0.4, 1);
+  const end = baselineFade(0.6, 0.1, 0.4, 1);
+  assert.strictEqual(start, 0);
+  assert(mid > 0 && mid < 1);
+  assert.strictEqual(end, 1);
+  const gammaSoft = baselineFade(0.2, 0.1, 0.4, 1.4);
+  assert(gammaSoft <= mid);
+}
+
 function testSeedFilesAreCleanObjects() {
   const seeds = [
     path.join(__dirname, '..', 'public', 'localStorage.json'),
@@ -562,6 +574,7 @@ function run() {
   testBuildLineCameraSegmentsNoInternalPunctuation();
   testBuildWordEnvelopesOverlapAndClamp();
   testBuildWordEnvelopesWithTiming();
+  testBaselineFade();
   testSeedFilesAreCleanObjects();
   testSeedThemesMatchPalettes();
   testRecordingUiHooked();

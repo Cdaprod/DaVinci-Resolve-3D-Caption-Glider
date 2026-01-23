@@ -27,6 +27,23 @@
     return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
   }
 
+  function smoothstep(edge0, edge1, x) {
+    const t = clamp01((x - edge0) / (edge1 - edge0));
+    return t * t * (3 - 2 * t);
+  }
+
+  function applyGamma(value, gamma = 1) {
+    const safe = Math.max(0.0001, Number(gamma) || 1);
+    return Math.pow(clamp01(value), safe);
+  }
+
+  function baselineFade(p, fadeStart = 0.02, fadeEnd = 0.34, gamma = 1) {
+    const start = Math.max(0, Number(fadeStart) || 0);
+    const end = Math.max(start + 1e-3, Number(fadeEnd) || 0);
+    const eased = smoothstep(start, end, clamp01(p));
+    return applyGamma(eased, gamma);
+  }
+
     function buildTextGeometrySpec(textSize = 0.1, textDepth = 0.001) {
       const size = Math.max(1e-4, Number(textSize) || 0.1);
       const depth = Math.max(0, Number(textDepth) || 0);
@@ -620,6 +637,9 @@
     clamp01,
     easeOutCubic,
     easeOutBack,
+    smoothstep,
+    applyGamma,
+    baselineFade,
     damp,
     computeAnimationTime,
     isValidFontResource,

@@ -517,6 +517,7 @@ function testRecordingUiHooked() {
   assert.ok(html.includes("linesUrl: '/public/demo-lines.txt'"), 'default demo lines URL should point at /public');
   assert.ok(html.includes('recordingDownloadUrl'), 'recording download URL should be tracked for cleanup');
   assert.ok(html.includes('const spanForCamera = Math.min(span, 4.5)'), 'camera framing should cap span used for distance calculations');
+  assert.ok(html.includes('mesh.position.copy(targetPos)'), 'FLIP easing should keep positions anchored to target');
 }
 
 function run() {

@@ -2498,22 +2498,14 @@ ${String(err)}`);
 
   function applyFlipTransform(mesh, targetPos, targetScale, dt, lambda = 18) {
     if (!mesh?.userData) return;
+    mesh.position.copy(targetPos);
     const safeDt = Math.max(0.001, Number(dt) || 0.016);
-    const posFlip = mesh.userData.flipOffset || new THREE.Vector3(0, 0, 0);
     const scaleFlip = mesh.userData.flipScale || new THREE.Vector3(0, 0, 0);
-    const flipScalar = AnimationHelpers?.applyFlipScalar;
     const flipScalarLog = AnimationHelpers?.applyFlipScalarLog;
-    if (!flipScalar || !flipScalarLog) {
-      mesh.position.copy(targetPos);
+    if (!flipScalarLog) {
       mesh.scale.copy(targetScale);
       return;
     }
-
-    const x = flipScalar(mesh.position.x, targetPos.x, posFlip.x, lambda, safeDt);
-    const y = flipScalar(mesh.position.y, targetPos.y, posFlip.y, lambda, safeDt);
-    const z = flipScalar(mesh.position.z, targetPos.z, posFlip.z, lambda, safeDt);
-    posFlip.set(x.flip, y.flip, z.flip);
-    mesh.position.set(x.value, y.value, z.value);
 
     const sx = flipScalarLog(mesh.scale.x, targetScale.x, scaleFlip.x, lambda, safeDt);
     const sy = flipScalarLog(mesh.scale.y, targetScale.y, scaleFlip.y, lambda, safeDt);
@@ -2521,7 +2513,6 @@ ${String(err)}`);
     scaleFlip.set(sx.flip, sy.flip, sz.flip);
     mesh.scale.set(sx.value, sy.value, sz.value);
 
-    mesh.userData.flipOffset = posFlip;
     mesh.userData.flipScale = scaleFlip;
   }
 

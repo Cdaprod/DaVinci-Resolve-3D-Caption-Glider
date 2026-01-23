@@ -332,6 +332,86 @@
     return { segments, totalMs: computedTotalMs };
   }
 
+  function buildWordEnvelopes(words = [], options = {}) {
+    const {
+      lineStartSec = 0,
+      lineStartMs = 0,
+      lineDurationMs,
+      overlap = 0.22,
+      minWordMs = 70,
+      maxWordMs = 320,
+      punctuationPausesMs = {},
+    } = options || {};
+
+    const safeWords = Array.isArray(words) ? words : [];
+    if (!safeWords.length) return [];
+
+    const hasTiming = safeWords.every((word) => Number.isFinite(Number(word?.startTime)) && Number.isFinite(Number(word?.endTime)));
+    let baseDurations = [];
+
+    if (hasTiming) {
+      baseDurations = safeWords.map((word) => {
+        const start = Number(word.startTime) - Number(lineStartSec || 0);
+        const end = Number(word.endTime) - Number(lineStartSec || 0);
+        return Math.max(0, (end - start) * 1000);
+      });
+    } else {
+      const weights = safeWords.map(word => Math.max(1, String(word?.text || '').replace(/[^\w]/g, '').length || String(word?.text || '').length));
+      const totalWeight = weights.reduce((sum, w) => sum + w, 0) || 1;
+      const targetMs = Math.max(0, Number(lineDurationMs) || 0);
+      const baseUnit = targetMs > 0 ? targetMs / totalWeight : 120;
+      baseDurations = weights.map(weight => weight * baseUnit);
+    }
+
+    const durationsWithPunctuation = baseDurations.map((duration, idx) => {
+      const punctuationClass = classifyTrailingPunctuation(safeWords[idx]?.text || '');
+      const pauseMs = punctuationClass === 'sentence'
+        ? Number(punctuationPausesMs.sentence || 0)
+        : punctuationClass === 'comma'
+          ? Number(punctuationPausesMs.comma || 0)
+          : punctuationClass === 'dash'
+            ? Number(punctuationPausesMs.dash || 0)
+            : 0;
+      return Math.max(0, duration + Math.max(0, pauseMs));
+    });
+
+    const totalNominal = durationsWithPunctuation.reduce((sum, ms) => sum + ms, 0) || 1;
+    const targetDuration = Number.isFinite(Number(lineDurationMs)) ? Math.max(1, Number(lineDurationMs)) : totalNominal;
+    const scaled = durationsWithPunctuation.map((duration) => {
+      const scaledMs = duration * (targetDuration / totalNominal);
+      return Math.max(minWordMs, Math.min(maxWordMs, scaledMs));
+    });
+
+    const scaledTotal = scaled.reduce((sum, ms) => sum + ms, 0) || 1;
+    const finalDurations = scaledTotal > targetDuration
+      ? scaled.map(ms => ms * (targetDuration / scaledTotal))
+      : scaled;
+
+    const envelopes = [];
+    let cursor = Math.max(0, Number(lineStartMs) || 0);
+    for (const duration of finalDurations) {
+      const endMs = cursor + duration;
+      envelopes.push({
+        startMs: cursor,
+        endMs,
+      });
+      const advance = duration * (1 - Math.max(0, Math.min(0.6, overlap)));
+      cursor += advance;
+    }
+
+    const hardEnd = Math.max(0, Number(lineStartMs) || 0) + targetDuration;
+    const lastEnd = envelopes.length ? envelopes[envelopes.length - 1].endMs : hardEnd;
+    if (lastEnd > hardEnd && envelopes.length) {
+      const scale = targetDuration / (lastEnd - (Number(lineStartMs) || 0));
+      for (const env of envelopes) {
+        env.startMs = (Number(lineStartMs) || 0) + (env.startMs - (Number(lineStartMs) || 0)) * scale;
+        env.endMs = (Number(lineStartMs) || 0) + (env.endMs - (Number(lineStartMs) || 0)) * scale;
+      }
+    }
+
+    return envelopes;
+  }
+
   function sanitizePersistedState(defaults = {}, stored = {}) {
     const base = (defaults && typeof defaults === 'object') ? defaults : {};
     const src = (stored && typeof stored === 'object') ? stored : {};
@@ -558,6 +638,7 @@
     buildCueWordTimings,
     classifyTrailingPunctuation,
     buildLineCameraSegments,
+    buildWordEnvelopes,
     normalizeProfileToken,
     normalizeTextAlign,
     lineAlignmentOffset,

@@ -273,6 +273,65 @@
     return words;
   }
 
+  function buildLineCameraSegments(words = [], options = {}) {
+    const { lineStartSec = 0, totalMs } = options || {};
+    const safeWords = Array.isArray(words) ? words : [];
+    if (!safeWords.length) {
+      return { segments: [], totalMs: Math.max(0, Number(totalMs) || 0) };
+    }
+
+    const normalized = safeWords.map((word) => {
+      const startSec = Number(word?.startTime ?? 0) - Number(lineStartSec || 0);
+      const endSec = Number(word?.endTime ?? startSec) - Number(lineStartSec || 0);
+      return {
+        text: String(word?.text ?? '').trim(),
+        startMs: Math.max(0, startSec * 1000),
+        endMs: Math.max(0, endSec * 1000),
+      };
+    });
+
+    const computedTotalMs = Math.max(
+      0,
+      Number.isFinite(Number(totalMs)) ? Number(totalMs) : Math.max(...normalized.map(word => word.endMs))
+    );
+
+    const breakpoints = [];
+    for (let i = 0; i < normalized.length - 1; i++) {
+      const punctuation = classifyTrailingPunctuation(normalized[i].text);
+      if (punctuation) breakpoints.push(i);
+    }
+
+    const segmentEnds = breakpoints.length ? [...breakpoints, normalized.length - 1] : [normalized.length - 1];
+    const segments = [];
+    let startIdx = 0;
+    let prevEndMs = 0;
+
+    for (const endIdx of segmentEnds) {
+      const startWord = normalized[startIdx] || normalized[0];
+      const endWord = normalized[endIdx];
+      const startMs = startIdx === 0 ? 0 : Math.max(prevEndMs, startWord.startMs);
+      let endMs = Math.max(startMs + 1, endWord.endMs);
+      if (endIdx === normalized.length - 1) {
+        endMs = Math.max(endMs, computedTotalMs);
+      } else {
+        endMs = Math.min(endMs, computedTotalMs);
+      }
+
+      segments.push({
+        startIdx,
+        endIdx,
+        startMs,
+        endMs,
+        isTerminal: endIdx === normalized.length - 1,
+      });
+
+      prevEndMs = endMs;
+      startIdx = endIdx + 1;
+    }
+
+    return { segments, totalMs: computedTotalMs };
+  }
+
   function sanitizePersistedState(defaults = {}, stored = {}) {
     const base = (defaults && typeof defaults === 'object') ? defaults : {};
     const src = (stored && typeof stored === 'object') ? stored : {};
@@ -498,6 +557,7 @@
     parseSrtCues,
     buildCueWordTimings,
     classifyTrailingPunctuation,
+    buildLineCameraSegments,
     normalizeProfileToken,
     normalizeTextAlign,
     lineAlignmentOffset,

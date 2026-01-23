@@ -2160,6 +2160,66 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
         if (/[-—]+$/.test(text)) return 'dash';
         return null;
       };
+  const buildLineCameraSegments = (window.AnimationHelpers && typeof window.AnimationHelpers.buildLineCameraSegments === 'function')
+    ? window.AnimationHelpers.buildLineCameraSegments
+    : function fallbackBuildLineCameraSegments(words = [], options = {}) {
+        const { lineStartSec = 0, totalMs } = options || {};
+        const safeWords = Array.isArray(words) ? words : [];
+        if (!safeWords.length) {
+          return { segments: [], totalMs: Math.max(0, Number(totalMs) || 0) };
+        }
+
+        const normalized = safeWords.map((word) => {
+          const startSec = Number(word?.startTime ?? 0) - Number(lineStartSec || 0);
+          const endSec = Number(word?.endTime ?? startSec) - Number(lineStartSec || 0);
+          return {
+            text: String(word?.text ?? '').trim(),
+            startMs: Math.max(0, startSec * 1000),
+            endMs: Math.max(0, endSec * 1000),
+          };
+        });
+
+        const computedTotalMs = Math.max(
+          0,
+          Number.isFinite(Number(totalMs)) ? Number(totalMs) : Math.max(...normalized.map(word => word.endMs))
+        );
+
+        const breakpoints = [];
+        for (let i = 0; i < normalized.length - 1; i++) {
+          const punctuation = classifyTrailingPunctuation(normalized[i].text);
+          if (punctuation) breakpoints.push(i);
+        }
+
+        const segmentEnds = breakpoints.length ? [...breakpoints, normalized.length - 1] : [normalized.length - 1];
+        const segments = [];
+        let startIdx = 0;
+        let prevEndMs = 0;
+
+        for (const endIdx of segmentEnds) {
+          const startWord = normalized[startIdx] || normalized[0];
+          const endWord = normalized[endIdx];
+          const startMs = startIdx === 0 ? 0 : Math.max(prevEndMs, startWord.startMs);
+          let endMs = Math.max(startMs + 1, endWord.endMs);
+          if (endIdx === normalized.length - 1) {
+            endMs = Math.max(endMs, computedTotalMs);
+          } else {
+            endMs = Math.min(endMs, computedTotalMs);
+          }
+
+          segments.push({
+            startIdx,
+            endIdx,
+            startMs,
+            endMs,
+            isTerminal: endIdx === normalized.length - 1,
+          });
+
+          prevEndMs = endMs;
+          startIdx = endIdx + 1;
+        }
+
+        return { segments, totalMs: computedTotalMs };
+      };
 
   function punctuationPauseMs(wordText = '') {
     const kind = classifyTrailingPunctuation(wordText);
@@ -2758,6 +2818,7 @@ ${String(err)}`);
     const emphasisProfile = getEmphasisProfile();
     const lineProfile = lineObj.profileSettings || getLineProfile(lineObj.profileId);
     const activeRevealStyle = lineObj.revealStyleOverride || lineProfile?.revealStyle || cfg.revealStyle;
+    const timingWords = Array.isArray(words) && words.length === n ? words : null;
 
     for (const m of meshes) {
       m.visible = false;
@@ -2776,12 +2837,20 @@ ${String(err)}`);
 
     const bounds = computeCenterBounds(c2);
 
-    const ARC_SAMPLES = Math.max(320, n * 120);
-    const lengths = curve.getLengths(ARC_SAMPLES);
-    const totalLen = lengths[lengths.length - 1];
-
     const durationSec = Math.max(0.05, (endTime - startTime));
     const totalMs = durationSec * 1000;
+    const segmentPlan = timingWords ? buildLineCameraSegments(timingWords, { lineStartSec: startTime, totalMs }) : { segments: [], totalMs };
+    const segments = (segmentPlan.segments && segmentPlan.segments.length)
+      ? segmentPlan.segments
+      : [{ startIdx: 0, endIdx: Math.max(0, n - 1), startMs: 0, endMs: totalMs, isTerminal: true }];
+    const segmentU = segments.map(seg => {
+      const denom = Math.max(1, n - 1);
+      return {
+        ...seg,
+        startU: n <= 1 ? 0 : seg.startIdx / denom,
+        endU: n <= 1 ? 1 : seg.endIdx / denom,
+      };
+    });
     const start = performance.now();
 
     let camX = camera.position.x;
@@ -2805,41 +2874,39 @@ ${String(err)}`);
 
       const elapsed = now - start;
       const uRaw = Math.min(elapsed / totalMs, 1);
-      const eased = smooth01(uRaw);
-      const u = easeOutEndU(eased);
 
       const currentTime = startTime + (uRaw * durationSec);
-      const activeIdx = computeActiveWordIndex(Array.isArray(words) && words.length === meshes.length ? words : null, currentTime, uRaw, n);
-      const dist = u * totalLen;
-      let idx = 0;
-      while (idx < lengths.length && lengths[idx] < dist) idx++;
-
-      const denom = Math.max(1, lengths.length - 1);
-      const t = idx / denom;
+      const activeIdx = computeActiveWordIndex(timingWords, currentTime, uRaw, n);
       const activeProgress = (typeof activeIdx === 'number' && activeIdx >= 0)
         ? clamp01(activeIdx / Math.max(1, n - 1))
         : 0;
       const adjustedLookAhead = lookAheadU * (0.32 + 0.28 * activeProgress);
-      const t2 = Math.min(1, t + adjustedLookAhead);
+      let activeSegment = segmentU[segmentU.length - 1];
+      for (const seg of segmentU) {
+        if (elapsed <= seg.endMs) {
+          activeSegment = seg;
+          break;
+        }
+      }
+      const segmentDuration = Math.max(1, activeSegment.endMs - activeSegment.startMs);
+      const segmentT = clamp01((elapsed - activeSegment.startMs) / segmentDuration);
+      const segmentEase = activeSegment.isTerminal ? easeOutEndU(segmentT) : smooth01(segmentT);
+      const segmentUValue = activeSegment.startU + (activeSegment.endU - activeSegment.startU) * segmentEase;
+      const t2 = Math.min(1, segmentUValue + adjustedLookAhead);
       const isEmphasis = activeIdx >= 0 && Array.isArray(emphasisFlags) && emphasisFlags[activeIdx];
       const isTerminal = activeIdx === (n - 1);
       const bias = computeEmphasisBias(emphasisProfile, activeIdx, emphasisFlags, widths, uRaw) + (lineProfile?.endBiasPx ?? 0);
 
       let target = curve.getPointAt(t2);
-      const focus = (activeIdx >= 0 && activeIdx < c2.length) ? c2[activeIdx] : null;
-      if (focus) {
-        const blend = Math.min(0.72, 0.28 + (isEmphasis ? 0.10 : 0) + (isTerminal ? 0.12 : 0));
-        target.lerp(focus, blend);
-      }
       target = shapeTargetWithBounds(target, uRaw, c2, widths, bounds, bias);
 
       const targetLambda = Math.max(0.1, followLambda * 1.05);
       targetX = damp(targetX, target.x, targetLambda, dt);
       targetY = damp(targetY, target.y, targetLambda, dt);
 
-      if (Array.isArray(words) && words.length === meshes.length) {
-        for (let k = 0; k < words.length; k++) {
-          if (currentTime >= Number(words[k].startTime ?? 0)) startReveal(meshes[k], now);
+      if (timingWords) {
+        for (let k = 0; k < timingWords.length; k++) {
+          if (currentTime >= Number(timingWords[k].startTime ?? 0)) startReveal(meshes[k], now);
         }
       } else {
         const p = uRaw * (n - 1);
@@ -2922,13 +2989,21 @@ ${String(err)}`);
 
     const bounds = computeCenterBounds(c2);
 
-    const ARC_SAMPLES = Math.max(320, n * 120);
-    const lengths = curve.getLengths(ARC_SAMPLES);
-    const totalLen = lengths[lengths.length - 1];
-
     const profileDurationMs = typeof lineObj.durationMs === 'number' ? lineObj.durationMs : null;
     const wordsPerSec = Math.max(0.1, cfg.wordsPerSecond * (lineProfile?.speedMultiplier ?? 1));
     const totalMs = profileDurationMs ?? (n * (1000 / wordsPerSec));
+    const segmentPlan = fallbackWords ? buildLineCameraSegments(fallbackWords, { lineStartSec: 0, totalMs }) : { segments: [], totalMs };
+    const segments = (segmentPlan.segments && segmentPlan.segments.length)
+      ? segmentPlan.segments
+      : [{ startIdx: 0, endIdx: Math.max(0, n - 1), startMs: 0, endMs: totalMs, isTerminal: true }];
+    const segmentU = segments.map(seg => {
+      const denom = Math.max(1, n - 1);
+      return {
+        ...seg,
+        startU: n <= 1 ? 0 : seg.startIdx / denom,
+        endU: n <= 1 ? 1 : seg.endIdx / denom,
+      };
+    });
     const start = performance.now();
 
     let camX = camera.position.x;
@@ -2952,33 +3027,31 @@ ${String(err)}`);
 
       const elapsed = now - start;
       const uRaw = Math.min(elapsed / totalMs, 1);
-      const eased = smooth01(uRaw);
-      const u = easeOutEndU(eased);
 
       const currentTimeSec = elapsed / 1000;
       const activeIdx = computeActiveWordIndex(fallbackWords, currentTimeSec, uRaw, n);
-      const dist = u * totalLen;
-      let idx = 0;
-      while (idx < lengths.length && lengths[idx] < dist) idx++;
-
-      const denom = Math.max(1, lengths.length - 1);
-      const t = idx / denom;
       const activeProgress = (typeof activeIdx === 'number' && activeIdx >= 0)
         ? clamp01(activeIdx / Math.max(1, n - 1))
         : 0;
       const adjustedLookAhead = lookAheadU * (0.32 + 0.28 * activeProgress);
-      const t2 = Math.min(1, t + adjustedLookAhead);
+      let activeSegment = segmentU[segmentU.length - 1];
+      for (const seg of segmentU) {
+        if (elapsed <= seg.endMs) {
+          activeSegment = seg;
+          break;
+        }
+      }
+      const segmentDuration = Math.max(1, activeSegment.endMs - activeSegment.startMs);
+      const segmentT = clamp01((elapsed - activeSegment.startMs) / segmentDuration);
+      const segmentEase = activeSegment.isTerminal ? easeOutEndU(segmentT) : smooth01(segmentT);
+      const segmentUValue = activeSegment.startU + (activeSegment.endU - activeSegment.startU) * segmentEase;
+      const t2 = Math.min(1, segmentUValue + adjustedLookAhead);
 
       const isEmphasis = activeIdx >= 0 && Array.isArray(emphasisFlags) && emphasisFlags[activeIdx];
       const isTerminal = activeIdx === (n - 1);
       const bias = computeEmphasisBias(emphasisProfile, activeIdx, emphasisFlags, widths, uRaw) + (lineProfile?.endBiasPx ?? 0);
 
       let target = curve.getPointAt(t2);
-      const focus = (activeIdx >= 0 && activeIdx < c2.length) ? c2[activeIdx] : null;
-      if (focus) {
-        const blend = Math.min(0.72, 0.28 + (isEmphasis ? 0.10 : 0) + (isTerminal ? 0.12 : 0));
-        target.lerp(focus, blend);
-      }
       target = shapeTargetWithBounds(target, uRaw, c2, widths, bounds, bias);
 
       const targetLambda = Math.max(0.1, followLambda * 1.05);

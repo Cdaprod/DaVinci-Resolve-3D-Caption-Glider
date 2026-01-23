@@ -28,6 +28,7 @@ const {
   parseSrtCues,
   buildCueWordTimings,
   classifyTrailingPunctuation,
+  buildLineCameraSegments,
   computeAnimationTime,
   patchNoiseShaderSources,
 } = require('../public/animation-helpers');
@@ -382,6 +383,50 @@ function testClassifyTrailingPunctuation() {
   assert.strictEqual(classifyTrailingPunctuation('clean'), null);
 }
 
+function testBuildLineCameraSegments() {
+  const words = [
+    { text: 'This', startTime: 0, endTime: 0.2 },
+    { text: 'is', startTime: 0.2, endTime: 0.4 },
+    { text: 'example,', startTime: 0.4, endTime: 0.7 },
+    { text: 'final.', startTime: 0.7, endTime: 1.0 },
+  ];
+
+  const { segments, totalMs } = buildLineCameraSegments(words, { lineStartSec: 0, totalMs: 1000 });
+  assert.strictEqual(totalMs, 1000);
+  assert.strictEqual(segments.length, 2);
+  assert.deepStrictEqual(segments[0], {
+    startIdx: 0,
+    endIdx: 2,
+    startMs: 0,
+    endMs: 700,
+    isTerminal: false,
+  });
+  assert.deepStrictEqual(segments[1], {
+    startIdx: 3,
+    endIdx: 3,
+    startMs: 700,
+    endMs: 1000,
+    isTerminal: true,
+  });
+}
+
+function testBuildLineCameraSegmentsNoInternalPunctuation() {
+  const words = [
+    { text: 'Short', startTime: 0, endTime: 0.3 },
+    { text: 'line.', startTime: 0.3, endTime: 0.8 },
+  ];
+
+  const { segments } = buildLineCameraSegments(words, { lineStartSec: 0 });
+  assert.strictEqual(segments.length, 1);
+  assert.deepStrictEqual(segments[0], {
+    startIdx: 0,
+    endIdx: 1,
+    startMs: 0,
+    endMs: 800,
+    isTerminal: true,
+  });
+}
+
 function testSeedFilesAreCleanObjects() {
   const seeds = [
     path.join(__dirname, '..', 'public', 'localStorage.json'),
@@ -477,6 +522,8 @@ function run() {
   testBuildCueWordTimings();
   testBuildCueWordTimingsPunctuation();
   testClassifyTrailingPunctuation();
+  testBuildLineCameraSegments();
+  testBuildLineCameraSegmentsNoInternalPunctuation();
   testSeedFilesAreCleanObjects();
   testSeedThemesMatchPalettes();
   testRecordingUiHooked();

@@ -993,6 +993,32 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
   const renderDownloadEl = document.getElementById('renderDownload');
   const wplEl = document.getElementById('wpl');
   const wplValEl = document.getElementById('wplVal');
+  const clampRangeValue = (window.AnimationHelpers && typeof window.AnimationHelpers.clampRangeValue === 'function')
+    ? window.AnimationHelpers.clampRangeValue
+    : function fallbackClampRangeValue(value, { min = 0, max = Infinity, fallback = 0 } = {}) {
+        const num = Number(value);
+        const minNum = Number(min);
+        const maxNum = Number(max);
+        const safeMin = Number.isFinite(minNum) ? minNum : 0;
+        const safeMax = Number.isFinite(maxNum) ? maxNum : Infinity;
+        if (!Number.isFinite(num)) return fallback;
+        return Math.min(safeMax, Math.max(safeMin, num));
+      };
+
+  function getWordsPerLineValue(value = wplEl?.value) {
+    const min = Number(wplEl?.min ?? 0);
+    const max = Number(wplEl?.max ?? Infinity);
+    const fallback = Number(wplEl?.value ?? min ?? 0) || 0;
+    const clamped = clampRangeValue(value, { min, max, fallback });
+    return Math.max(0, Math.round(clamped));
+  }
+
+  function applyWordsPerLineValue(value) {
+    const clamped = getWordsPerLineValue(value);
+    if (wplEl) wplEl.value = String(clamped);
+    if (wplValEl) wplValEl.textContent = String(clamped);
+    return clamped;
+  }
   const animSpeedEl = document.getElementById('animSpeed');
   const animSpeedValEl = document.getElementById('animSpeedVal');
   const lineStartDelayEl = document.getElementById('lineStartDelay');
@@ -1024,7 +1050,7 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
   btnStop.disabled = true;
 
   wplEl.addEventListener('input', () => {
-    wplValEl.textContent = String(wplEl.value);
+    applyWordsPerLineValue(wplEl.value);
     persistState();
   });
 
@@ -1346,7 +1372,7 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
     try {
       const payload = {
         cfg: sanitizePersistedState(DEFAULT_CFG, cfg),
-        wpl: Number(wplEl?.value ?? 0) || 0,
+        wpl: getWordsPerLineValue(),
         workspace: {
           project: workspaceState.project || '',
           video: workspaceState.video || '',
@@ -1388,10 +1414,9 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
     }
 
     if (typeof payload.wpl === 'number' && isFinite(payload.wpl)) {
-      wplEl.value = String(payload.wpl);
-      wplValEl.textContent = String(payload.wpl);
+      applyWordsPerLineValue(payload.wpl);
     } else {
-      wplValEl.textContent = String(wplEl.value);
+      applyWordsPerLineValue(wplEl.value);
     }
 
     animSpeedEl.value = String(cfg.animationSpeed ?? DEFAULT_CFG.animationSpeed);
@@ -1516,7 +1541,7 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
       const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/media/generate-captions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ video_rel_path: videoRel, model_size: 'small', max_chars: Number(wplEl.value) * 4 }),
+        body: JSON.stringify({ video_rel_path: videoRel, model_size: 'small', max_chars: getWordsPerLineValue() * 4 }),
       });
       if (!res.ok) {
         const txt = await res.text();
@@ -1534,7 +1559,7 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
 
       const lines = await loadLines(cfg.linesUrl);
       if (!fontRef) fontRef = await loadFontFromSelection();
-      const wpl = Number(wplEl.value);
+      const wpl = getWordsPerLineValue();
       buildFromPlainLines(fontRef, lines, wpl);
       setStatus(`Generated captions for ${videoRel}\nLines: ${lines.length}`);
       setWorkspaceStatus('Captions ready.');
@@ -2429,20 +2454,28 @@ ${String(err)}`);
       return { group, meshes, centers, widths, emphasisFlags, normalizedWords };
     }
 
+  const buildTimedLinesFromTranscript = (window.AnimationHelpers && typeof window.AnimationHelpers.buildTimedLinesFromTranscript === 'function')
+    ? window.AnimationHelpers.buildTimedLinesFromTranscript
+    : function fallbackTimedLines(words = [], wordsPerLine = 8) {
+        const entries = Array.isArray(words) ? words : [];
+        const safeWordsPerLine = Math.max(1, Math.round(Number(wordsPerLine) || 1));
+        const lines = [];
+        for (let i = 0; i < entries.length; i += safeWordsPerLine) {
+          const chunk = entries.slice(i, i + safeWordsPerLine);
+          if (!chunk.length) continue;
+          const parsed = chunk.map(w => parseEmphasisToken(w?.text ?? ''));
+          const text = parsed.map(p => p.cleanText).join(' ');
+          const startTime = Number(chunk[0]?.startTime ?? 0);
+          const endTime = Number(chunk[chunk.length - 1]?.endTime ?? startTime);
+          const normalizedWords = chunk.map((w, idx) => ({ ...w, text: parsed[idx].cleanText, emphasis: parsed[idx].isEmphasized }));
+          lines.push({ text, startTime, endTime, words: normalizedWords });
+        }
+        return lines;
+      };
+
   function transcriptionToTimedLines(transcription, wordsPerLine = 8) {
     const words = Array.isArray(transcription?.words) ? transcription.words : [];
-    const lines = [];
-    for (let i = 0; i < words.length; i += wordsPerLine) {
-      const chunk = words.slice(i, i + wordsPerLine);
-      if (!chunk.length) continue;
-      const parsed = chunk.map(w => parseEmphasisToken(w.text ?? ''));
-      const text = parsed.map(p => p.cleanText).join(' ');
-      const startTime = Number(chunk[0].startTime ?? 0);
-      const endTime = Number(chunk[chunk.length - 1].endTime ?? startTime);
-      const normalizedWords = chunk.map((w, idx) => ({ ...w, text: parsed[idx].cleanText, emphasis: parsed[idx].isEmphasized }));
-      lines.push({ text, startTime, endTime, words: normalizedWords });
-    }
-    return lines;
+    return buildTimedLinesFromTranscript(words, wordsPerLine);
   }
 
   // -------------------------
@@ -2465,22 +2498,14 @@ ${String(err)}`);
 
   function applyFlipTransform(mesh, targetPos, targetScale, dt, lambda = 18) {
     if (!mesh?.userData) return;
+    mesh.position.copy(targetPos);
     const safeDt = Math.max(0.001, Number(dt) || 0.016);
-    const posFlip = mesh.userData.flipOffset || new THREE.Vector3(0, 0, 0);
     const scaleFlip = mesh.userData.flipScale || new THREE.Vector3(0, 0, 0);
-    const flipScalar = AnimationHelpers?.applyFlipScalar;
     const flipScalarLog = AnimationHelpers?.applyFlipScalarLog;
-    if (!flipScalar || !flipScalarLog) {
-      mesh.position.copy(targetPos);
+    if (!flipScalarLog) {
       mesh.scale.copy(targetScale);
       return;
     }
-
-    const x = flipScalar(mesh.position.x, targetPos.x, posFlip.x, lambda, safeDt);
-    const y = flipScalar(mesh.position.y, targetPos.y, posFlip.y, lambda, safeDt);
-    const z = flipScalar(mesh.position.z, targetPos.z, posFlip.z, lambda, safeDt);
-    posFlip.set(x.flip, y.flip, z.flip);
-    mesh.position.set(x.value, y.value, z.value);
 
     const sx = flipScalarLog(mesh.scale.x, targetScale.x, scaleFlip.x, lambda, safeDt);
     const sy = flipScalarLog(mesh.scale.y, targetScale.y, scaleFlip.y, lambda, safeDt);
@@ -2488,7 +2513,6 @@ ${String(err)}`);
     scaleFlip.set(sx.flip, sy.flip, sz.flip);
     mesh.scale.set(sx.value, sy.value, sz.value);
 
-    mesh.userData.flipOffset = posFlip;
     mesh.userData.flipScale = scaleFlip;
   }
 
@@ -3232,12 +3256,12 @@ ${String(err)}`);
       }
 
       if (transcriptionData && Array.isArray(transcriptionData.words) && transcriptionData.words.length) {
-        const wpl = Number(wplEl.value);
+        const wpl = getWordsPerLineValue();
         const timedLines = transcriptionToTimedLines(transcriptionData, wpl);
         buildFromTimedLines(font, timedLines);
       } else {
         const lines = await loadLines(cfg.linesUrl);
-        const wpl = Number(wplEl.value);
+        const wpl = getWordsPerLineValue();
         buildFromPlainLines(font, lines, wpl);
       }
 
@@ -3590,7 +3614,7 @@ ${String(err)}`);
     if (!fontRef) return;
 
     if (transcriptionData && Array.isArray(transcriptionData.words) && transcriptionData.words.length) {
-      const wpl = Number(wplEl.value);
+      const wpl = getWordsPerLineValue();
       const timedLines = transcriptionToTimedLines(transcriptionData, wpl);
       buildFromTimedLines(fontRef, timedLines);
       prepareTimelineFromLineObjs(lineObjs);
@@ -3606,7 +3630,7 @@ ${String(err)}`);
     }
 
     const lines = await loadLines(cfg.linesUrl);
-    const wpl = Number(wplEl.value);
+    const wpl = getWordsPerLineValue();
     buildFromPlainLines(fontRef, lines, wpl);
     prepareTimelineFromLineObjs(lineObjs);
     setTimelineTime(timelineState.currentMs || 0);
@@ -3645,7 +3669,7 @@ ${String(err)}`);
 
     transcriptionData = data;
     setCaptionSourceMode('lines');
-    const wpl = Number(wplEl.value);
+    const wpl = getWordsPerLineValue();
     const timedLines = transcriptionToTimedLines(data, wpl);
 
     if (!timedLines.length) {
@@ -3666,7 +3690,7 @@ ${String(err)}`);
   btnCreate.addEventListener('click', async () => {
     if (!transcriptionData?.words?.length) { setStatus('Load from Resolve first.'); return; }
 
-    const wpl = Number(wplEl.value);
+    const wpl = getWordsPerLineValue();
     setStatus('Creating captions in Resolve…');
 
     try {
@@ -3696,7 +3720,7 @@ ${String(err)}`);
       populateThemes();
       populateEmphasisProfiles();
       keepPrevEl.checked = !!cfg.keepPreviousLinesVisible;
-      wplValEl.textContent = String(wplEl.value);
+      applyWordsPerLineValue(wplEl.value);
 
       await hydrateState();
       syncWorkspaceInputs();
@@ -3716,7 +3740,7 @@ ${String(err)}`);
     const data = await loadTranscriptionFromResolve();
     if (data && !data.error && Array.isArray(data.words) && data.words.length) {
       transcriptionData = data;
-      const wpl = Number(wplEl.value);
+      const wpl = getWordsPerLineValue();
       const timedLines = transcriptionToTimedLines(data, wpl);
       if (timedLines.length) {
         buildFromTimedLines(font, timedLines);
@@ -3728,7 +3752,7 @@ ${String(err)}`);
 
     // fallback to demo-lines.txt
     const lines = await loadLines(cfg.linesUrl);
-    const wpl = Number(wplEl.value);
+    const wpl = getWordsPerLineValue();
     buildFromPlainLines(font, lines, wpl);
 
     camera.position.set(0, 0, cfg.cameraDistance);

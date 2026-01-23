@@ -10,7 +10,7 @@ It’s mounted above my desk, looking straight down at the workspace.
 ...from another camera.
 [PAUSE=220]
 
-#default But for what I’m doing, this thing is honestly.**perfect**
+#default But for what I’m doing, this thing is honestly... **perfect**
 [PAUSE=180]
 
 All I really need here is access to a sensor,

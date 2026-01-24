@@ -30,6 +30,7 @@ const {
   buildCueWordTimings,
   computeAnimationTime,
   scaleTimelineMs,
+  resolveAnimationSpeed,
   applyFlipScalar,
   applyFlipScalarLog,
   patchNoiseShaderSources,
@@ -101,6 +102,12 @@ function testScaleTimelineMs() {
   assert.strictEqual(scaleTimelineMs(400, 2), 200);
   assert.strictEqual(scaleTimelineMs(400, 0.5), 800);
   assert.strictEqual(scaleTimelineMs(0, 3, 50), 50);
+}
+
+function testResolveAnimationSpeed() {
+  assert.strictEqual(resolveAnimationSpeed(false, 2), 1);
+  assert.strictEqual(resolveAnimationSpeed(true, 2), 2);
+  assert.strictEqual(resolveAnimationSpeed(true, 0), 1);
 }
 
 function testApplyFlipScalar() {
@@ -503,6 +510,7 @@ function run() {
   testComputeCenterBounds();
 testComputeAnimationTime();
 testScaleTimelineMs();
+testResolveAnimationSpeed();
 testApplyFlipScalar();
   testApplyFlipScalarLog();
   testEndBias();

@@ -657,7 +657,7 @@
       lookAheadOffset: -0.02,
       cameraDistanceOffset: 0.22,
       holdMs: 220,
-      revealStyle: 'fade-scale',
+      revealStyle: null,
       endBiasPx: 0.045,
     },
     B: {
@@ -668,7 +668,7 @@
       lookAheadOffset: 0.032,
       cameraDistanceOffset: -0.14,
       holdMs: 70,
-      revealStyle: 'bloom',
+      revealStyle: null,
       endBiasPx: 0.095,
     },
     C: {
@@ -679,7 +679,7 @@
       lookAheadOffset: -0.035,
       cameraDistanceOffset: 0.3,
       holdMs: 360,
-      revealStyle: 'word-fade',
+      revealStyle: null,
       endBiasPx: 0.12,
     }
   };
@@ -1782,8 +1782,9 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
 
     const baseDelayMs = cfg.keepPreviousLinesVisible ? 0 : Math.max(0, cfg.lineStartDelayMs || 0);
     const delayMs = lineObj?.hasTiming ? baseDelayMs : scaleTimelineMs(baseDelayMs, cfg.animationSpeed ?? 1);
+    const speed = resolveAnimationSpeed(lineObj?.hasTiming, cfg.animationSpeed ?? 1);
     const animationTimeSec = computeAnimationTime(currentTimeSec, startTime, {
-      speed: cfg.animationSpeed ?? 1,
+      speed,
       delayMs,
     });
 
@@ -2100,6 +2101,12 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
         const safeValue = Math.max(0, Number(valueMs) || 0);
         const safeSpeed = Math.max(0.01, Number(speed) || 1);
         return Math.max(minMs, safeValue / safeSpeed);
+      };
+
+  const resolveAnimationSpeed = (window.AnimationHelpers && typeof window.AnimationHelpers.resolveAnimationSpeed === 'function')
+    ? window.AnimationHelpers.resolveAnimationSpeed
+    : function fallbackResolveAnimationSpeed(hasTiming, speed = 1) {
+        return hasTiming ? Math.max(0.01, Number(speed) || 1) : 1;
       };
 
   const parseScriptLines = (window.AnimationHelpers && typeof window.AnimationHelpers.parseScriptLines === 'function')

@@ -96,6 +96,11 @@
     return Math.max(minMs, scaled);
   }
 
+  function resolveAnimationSpeed(hasTiming, speed = 1) {
+    if (!hasTiming) return 1;
+    return Math.max(0.01, Number(speed) || 1);
+  }
+
   function isValidFontResource(font) {
     if (!font || typeof font !== 'object') return false;
     const data = font.data;
@@ -530,6 +535,7 @@
     applyFlipScalarLog,
     computeAnimationTime,
     scaleTimelineMs,
+    resolveAnimationSpeed,
     isValidFontResource,
     normalizeFontResource,
     computeCenterBounds,

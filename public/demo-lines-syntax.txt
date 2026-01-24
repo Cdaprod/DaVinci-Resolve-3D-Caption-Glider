@@ -1,5 +1,7 @@
-Cinematic scripting starts in the default glide profile—no marker needed.
+#default Cinematic scripting starts in the default glide profile—no marker needed.
+[BR=1]
 Paragraph breaks are authored with [BREAK] before the next caption.
+[BREAK]
 #A Calm dolly profile slows the follow and lets the words breathe.
 Soft emphasis **leans** in while [PAUSE=220] sets up the next beat.
 #B Assertive profile tightens follow and lands punctuation with punch.

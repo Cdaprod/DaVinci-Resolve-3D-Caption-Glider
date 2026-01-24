@@ -1,152 +1,224 @@
-I was always told I had potential.  
-That awareness never left me, but at some point it stopped being hope and became fuel for fallacies.  
+#demo-lines-story-version
+
+#C As a kid I was always told I had potential.
+[PAUSE=160]
+[HOLD=240]
+[BREAK]
+
+#default That awareness never left me, but at some point it stopped being hope and became fuel for fallacies.
+[PAUSE=140]
 Fallacies about how I had missed my chance, wasted too much time, and left behind any real version of who I could have been or thought I should have been.
+[BREAK]
 
-One of the first places I fed those fallacies was in a burn clinic after an accident.  
-Looking back now, I realize the surrender happened long before I ever ended up there.  
+#A One of the first places I fed those fallacies was in a burn clinic after an accident.
+[PAUSE=160]
+Looking back now, I realize the surrender happened long before I ever ended up there.
 By the time my skin needed repairing, my ideals were already gone.
+[BREAK]
 
-When someone has no desire or duty to follow a direction in life, they do not drift accidentally.  
+#default When someone has no desire or duty to follow a direction in life, they do not drift accidentally.
 They choose an alternate path, even if it is negative, as long as it is intentional.
+[BREAK]
 
-I used to believe the problem was the crowd I kept.  
-That I was influenced, misled, or pulled into something I never intended to be part of.  
-But the truth is I wasn’t dragged into that life.  
-I dove into it willingly.
+#A I used to believe the problem was the crowd I kept.
+That I was influenced, misled, or pulled into something I never intended to be part of.
+[PAUSE=120]
+#B But the truth is I wasn’t dragged into that life.
+[HOLD=220]
+#B I dove into it willingly.
+[BREAK]
 
-I traded innocence for future stories.  
+#default I traded innocence for future stories.
 Stories I thought would someday justify the damage.
+[BREAK]
 
-Now, nearly two decades later, I can tell those stories.  
-I simply choose not to.  
-Because when I look back, I don’t just see my own fall.  
+#C Now, nearly two decades later, I can tell those stories.
+I simply choose not to.
+[PAUSE=140]
+Because when I look back, I don’t just see my own fall.
 I see the faces of people who didn’t survive it.
+[HOLD=240]
+[BREAK]
 
-That’s when I understood I wasn’t only shaped by circumstance.  
-I pulled others down with me.
+#default That’s when I understood I wasn’t only shaped by circumstance.
+#B I pulled others down with me.
+[BREAK]
 
-The first time I remember lying to myself, and it having lasting consequences, was in a hospital bed.  
+#A The first time I remember lying to myself, and it having lasting consequences, was in a hospital bed.
 My mother and father were there, along with a doctor preparing to clean third-degree burns covered in dirt and leaves.
+[BREAK]
 
-That doctor raised concerns about my tolerance to prescription medication.  
+#default That doctor raised concerns about my tolerance to prescription medication.
 Concerns that the anesthesia I needed might not work.
+[BREAK]
 
-When that was explained to me, I stood at a decision I didn’t recognize as important.  
-I could be honest, or I could protect myself from disappointment.  
-I chose silence.
+#A When that was explained to me, I stood at a decision I didn’t recognize as important.
+I could be honest, or I could protect myself from disappointment.
+#B I chose silence.
+[HOLD=220]
+[BREAK]
 
-I didn’t know then that silence could become a skill.
+#default I didn’t know then that silence could become a skill.
+[BREAK]
 
-The anesthesia failed.  
-Two people worked on either side of me, scrubbing burned skin from my chest and abdomen.  
+#A The anesthesia failed.
+Two people worked on either side of me, scrubbing burned skin from my chest and abdomen.
 In my memory, it feels like steel wool.
+[BREAK]
 
-That moment haunts me, but it is nothing compared to what came next.  
-That pain was temporary.  
-The pain that followed was not.
+#default That moment haunts me, but it is nothing compared to what came next.
+That pain was temporary.
+#C The pain that followed was not.
+[HOLD=220]
+[BREAK]
 
-Up until then, I told myself I was using recreationally.  
+#default Up until then, I told myself I was using recreationally.
 That belief ended in that hospital bed.
+[BREAK]
 
-Burns hurt, but knowing what I know now, I would have chosen pain over numbness.  
+#A Burns hurt, but knowing what I know now, I would have chosen pain over numbness.
 I can’t tell where the injury ended and withdrawal began.
+[BREAK]
 
-Nothing I have experienced since compares to the physical and mental suffering of addiction.  
+#default Nothing I have experienced since compares to the physical and mental suffering of addiction.
 It twists pain into something endless.
+[BREAK]
 
-So I ran.  
+#B So I ran.
 I ran into a world parents pray their children never encounter.
+[BREAK]
 
-Armed with lies that sounded logical, I took from anyone willing to give.  
+#default Armed with lies that sounded logical, I took from anyone willing to give.
 Friends, strangers, and eventually my own family.
+[BREAK]
 
-Danger felt like momentum.  
+#default Danger felt like momentum.
 Deception felt like belonging.
+[BREAK]
 
-I charged forward recklessly into a world of decay built on the backs of people like me who came before.  
+#B I charged forward recklessly into a world of decay built on the backs of people like me who came before.
 They welcomed me as I disappeared further.
+[BREAK]
 
-Every bridge I burned made the grave deeper.  
+#default Every bridge I burned made the grave deeper.
 That life lasted a decade.
+[BREAK]
 
-Very few of the people beside me survived it.  
-Through all of it, one thing never changed.  
-My family’s love.
+#default Very few of the people beside me survived it.
+Through all of it, one thing never changed.
+#C My family’s love.
+[HOLD=240]
+[BREAK]
 
-I carried it like weight, while they carried me without condition.
+#default I carried it like weight, while they carried me without condition.
+[BREAK]
 
-In 2013, someone said the word triplets.  
+#A In 2013, someone said the word triplets.
 Three lives, three futures.
+[BREAK]
 
-My first thought was not joy or fear.  
-It was calculation.  
+#default My first thought was not joy or fear.
+#B It was calculation.
 How will this affect my ability to keep using.
+[BREAK]
 
-By then I knew the system.  
+#default By then I knew the system.
 Rehab, jail, and back again.
+[BREAK]
 
-My body showed the cost.  
+#default My body showed the cost.
 Hollow cheeks, scarred arms, and a stare that scared people.
+[BREAK]
 
-The boys came early.  
+#A The boys came early.
 Kayson, Kayne, and Kole.
+[BREAK]
 
-Our families stepped in and did the real parenting.  
+#default Our families stepped in and did the real parenting.
 They let us pretend.
+[BREAK]
 
-But addiction cannot raise children.
+#B But addiction cannot raise children.
+[HOLD=220]
+[BREAK]
 
-Authorities were notified, families were trusted, and we were told to leave.  
+#default Authorities were notified, families were trusted, and we were told to leave.
 When I walked away from my childhood home, my newborn sons, and my parents, I felt almost nothing.
+[BREAK]
 
-Drugs dull the right emotions and sharpen the wrong ones.
+#default Drugs dull the right emotions and sharpen the wrong ones.
+[BREAK]
 
-Months passed with the same routines, the same hunger, and the same sickness.  
+#A Months passed with the same routines, the same hunger, and the same sickness.
 Then one night, I finally stopped long enough to hear a voice I had buried.
+[BREAK]
 
-My conscience spoke for the first time in ten years.
+#C My conscience spoke for the first time in ten years.
+[PAUSE=140]
+[HOLD=240]
+[BREAK]
 
-It didn’t shout or plead.  
+#default It didn’t shout or plead.
 It told me the truth.
+[BREAK]
 
-You had good parents and a father who loved you.  
+#B You had good parents and a father who loved you.
 You are failing three children who don’t even know it yet.
+[BREAK]
 
-Out here, in prison, or dead, those are the options.  
-Choose now or never.
+#default Out here, in prison, or dead, those are the options.
+#B Choose now or never.
+[HOLD=220]
+[BREAK]
 
-No one is coming to save you.  
-You save yourself.
+#default No one is coming to save you.
+#B You save yourself.
+[BREAK]
 
-Do one thing right for someone other than you.
+#default Do one thing right for someone other than you.
+[BREAK]
 
-I picked up my phone and called Cato.  
+#A I picked up my phone and called Cato.
 I trusted him not to steal my car.
+[BREAK]
 
-I said drive me to Atlanta, I’m checking into rehab.
+#B I said drive me to Atlanta, I’m checking into rehab.
+[HOLD=220]
+[BREAK]
 
-This time was different.  
-Not easier, but clearer.  
-Purpose changes pain.
+#default This time was different.
+Not easier, but clearer.
+#C Purpose changes pain.
+[HOLD=240]
+[BREAK]
 
-Ten years later, I still carry a hundred-dollar bill saved for him.  
-It isn’t about the ride.  
+#default Ten years later, I still carry a hundred-dollar bill saved for him.
+It isn’t about the ride.
 It’s about the ones who never made it out.
+[BREAK]
 
-About the fixes we prayed would save us and never did.
+#default About the fixes we prayed would save us and never did.
+[BREAK]
 
-Giving him that money wasn’t repayment.  
+#A Giving him that money wasn’t repayment.
 It was closure and hope handed forward.
+[BREAK]
 
-Maybe it made him believe there was another way.
+#default Maybe it made him believe there was another way.
+[BREAK]
 
-Cato disappeared for a while, just like I once did.  
+#default Cato disappeared for a while, just like I once did.
 Then one day, he saw me.
+[BREAK]
 
-I gave him the bill and told him why.
+#A I gave him the bill and told him why.
+[BREAK]
 
-Not long after, I heard the news.  
-He got clean.
+#default Not long after, I heard the news.
+#C He got clean.
+[HOLD=240]
+[BREAK]
 
-I smiled to myself.  
-Yeah, I meant to do that.
+#default I smiled to myself.
+#B Yeah, I meant to do that.
+[HOLD=260]

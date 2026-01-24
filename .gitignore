@@ -1,3 +1,3 @@
 /docs/IGNORE/**
-*localStorage.json
+/public/localStorage.json
 *clipboard*

@@ -53,7 +53,9 @@ UI additions:
 
 Edit the `cfg` object in `public/index.html` (or use the built-in configuration drawer) to tune fonts, spacing, reveal style, alignment, emphasis profiles, and typography presets sourced from `docs/TYPOGRAPHY.md`. New UI selections persist to `captioner_state_v1` in localStorage and the seeded `public/localStorage.json` files.
 
-Animation controls include the global `animationSpeed` multiplier (scales word reveals + camera tracking) and `lineStartDelayMs` (adds a short pre-roll when `keepPreviousLinesVisible` is off so the camera can settle before words begin).
+Animation controls include the global `animationSpeed` multiplier (scales word reveals + camera tracking and the pacing of untimed script playback) and `lineStartDelayMs` (adds a short pre-roll when `keepPreviousLinesVisible` is off so the camera can settle before words begin).
+
+For render-only captures, append `?render=1` to the UI URL to hide the control panel while keeping the caption canvas running.
 
 Default demo lines load from `/public/demo-lines.txt` when the FastAPI service is running (so the UI works correctly in Docker deployments).
 

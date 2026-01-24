@@ -35,6 +35,10 @@
       transition: transform 160ms ease, opacity 160ms ease;
     }
 
+    body.render-only #ui {
+      display: none;
+    }
+
     /* collapsed state: tuck it mostly offscreen but keep a tab */
     #ui.collapsed {
       transform: translateX(calc(min(var(--ui-width), 100vw) - 68px));
@@ -441,7 +445,7 @@
     <label>
       Animation speed (camera + words): <span id="animSpeedVal">1.00</span>×
       <input id="animSpeed" type="range" min="0.5" max="1.5" step="0.05" value="1" />
-      <small>Scales how fast words reveal and the camera tracks. Rebuild not required.</small>
+      <small>Scales how fast words reveal and the camera tracks (plus untimed line pacing). Rebuild not required.</small>
     </label>
 
     <label>
@@ -523,7 +527,7 @@
       Some iOS browsers may block WebM recording.
       Demo lines load from <code>/public/demo-lines.txt</code> when running the LAN service.
       Script tokens: <code>#A/#B/#C</code> switch profiles, <code>#default</code> resets to base; <code>[PAUSE=ms]</code> / <code>[HOLD=ms]</code> apply to the next line; <code>[BREAK]</code> adds a blank paragraph gap before the next caption.
-      Use the Animation speed slider to scale word reveals + camera follow; Line start delay only applies when keepPreviousLinesVisible is unchecked.
+      Use the Animation speed slider to scale word reveals + camera follow; Line start delay only applies when keepPreviousLinesVisible is unchecked. Append <code>?render=1</code> to the URL to hide the UI for render-only captures.
     </div>
   </div>
 </div>
@@ -536,6 +540,12 @@
 <script src="./lighting-rig.js"></script>
 
 <script>
+  const renderParam = new URLSearchParams(window.location.search).get('render');
+  const renderOnly = renderParam !== null && !['0', 'false', 'no', 'off'].includes(renderParam.trim().toLowerCase());
+  if (renderOnly) {
+    document.body.classList.add('render-only');
+  }
+
   // -------------------------
   // CONFIG (defaults)
   // -------------------------
@@ -641,36 +651,36 @@
     },
     A: {
       label: 'Profile A (calm dolly)',
-      speedMultiplier: 0.9,
-      followMult: 0.86,
-      lookAtMult: 0.9,
-      lookAheadOffset: -0.006,
-      cameraDistanceOffset: 0.1,
-      holdMs: 160,
-      revealStyle: 'grow-up',
-      endBiasPx: 0.025,
+      speedMultiplier: 0.8,
+      followMult: 0.72,
+      lookAtMult: 0.8,
+      lookAheadOffset: -0.02,
+      cameraDistanceOffset: 0.22,
+      holdMs: 220,
+      revealStyle: 'fade-scale',
+      endBiasPx: 0.045,
     },
     B: {
       label: 'Profile B (tight + assertive)',
-      speedMultiplier: 1.12,
-      followMult: 1.18,
-      lookAtMult: 1.1,
-      lookAheadOffset: 0.014,
-      cameraDistanceOffset: -0.07,
-      holdMs: 90,
-      revealStyle: 'slide-up',
-      endBiasPx: 0.05,
+      speedMultiplier: 1.35,
+      followMult: 1.45,
+      lookAtMult: 1.32,
+      lookAheadOffset: 0.032,
+      cameraDistanceOffset: -0.14,
+      holdMs: 70,
+      revealStyle: 'bloom',
+      endBiasPx: 0.095,
     },
     C: {
       label: 'Profile C (dramatic settle)',
-      speedMultiplier: 0.82,
-      followMult: 0.8,
-      lookAtMult: 0.88,
-      lookAheadOffset: -0.015,
-      cameraDistanceOffset: 0.16,
-      holdMs: 260,
-      revealStyle: 'grow-up',
-      endBiasPx: 0.07,
+      speedMultiplier: 0.7,
+      followMult: 0.62,
+      lookAtMult: 0.74,
+      lookAheadOffset: -0.035,
+      cameraDistanceOffset: 0.3,
+      holdMs: 360,
+      revealStyle: 'word-fade',
+      endBiasPx: 0.12,
     }
   };
 
@@ -1639,14 +1649,18 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
     for (const line of lines) {
       const hasTiming = typeof line.startTime === 'number' && typeof line.endTime === 'number';
       if (!hasTiming) {
+        const speed = Math.max(0.01, Number(cfg.animationSpeed) || 1);
         const pauseMs = Math.max(0, line.pauseMs || 0);
         const holdMs = Math.max(0, line.holdMs || 0);
-        cursorMs += pauseMs;
-        const durationMs = Math.max(50, line.durationMs || 0);
+        const scaledPauseMs = scaleTimelineMs(pauseMs, speed);
+        const scaledHoldMs = scaleTimelineMs(holdMs, speed);
+        const scaledLineHoldMs = scaleTimelineMs(cfg.lineHoldMsAfterComplete || 0, speed);
+        cursorMs += scaledPauseMs;
+        const durationMs = scaleTimelineMs(line.durationMs || 0, speed, 50);
         line.startTime = cursorMs / 1000;
         cursorMs += durationMs;
         line.endTime = cursorMs / 1000;
-        cursorMs += holdMs + (cfg.lineHoldMsAfterComplete || 0);
+        cursorMs += scaledHoldMs + scaledLineHoldMs;
       } else {
         const endMs = (Number(line.endTime) || 0) * 1000;
         cursorMs = Math.max(cursorMs, endMs + (cfg.lineHoldMsAfterComplete || 0));
@@ -1766,7 +1780,8 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
     const n = centers.length;
     if (n === 0) return;
 
-    const delayMs = cfg.keepPreviousLinesVisible ? 0 : Math.max(0, cfg.lineStartDelayMs || 0);
+    const baseDelayMs = cfg.keepPreviousLinesVisible ? 0 : Math.max(0, cfg.lineStartDelayMs || 0);
+    const delayMs = lineObj?.hasTiming ? baseDelayMs : scaleTimelineMs(baseDelayMs, cfg.animationSpeed ?? 1);
     const animationTimeSec = computeAnimationTime(currentTimeSec, startTime, {
       speed: cfg.animationSpeed ?? 1,
       delayMs,
@@ -2077,6 +2092,14 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
         const delaySec = Math.max(0, Number(delayMs) || 0) / 1000;
         const rel = (Number(currentTimeSec) || 0) - start - delaySec;
         return start + (rel * safeSpeed);
+      };
+
+  const scaleTimelineMs = (window.AnimationHelpers && typeof window.AnimationHelpers.scaleTimelineMs === 'function')
+    ? window.AnimationHelpers.scaleTimelineMs
+    : function fallbackScaleTimelineMs(valueMs, speed = 1, minMs = 0) {
+        const safeValue = Math.max(0, Number(valueMs) || 0);
+        const safeSpeed = Math.max(0.01, Number(speed) || 1);
+        return Math.max(minMs, safeValue / safeSpeed);
       };
 
   const parseScriptLines = (window.AnimationHelpers && typeof window.AnimationHelpers.parseScriptLines === 'function')
@@ -3262,6 +3285,7 @@ ${String(err)}`);
       const obj = buildLine(font, ln.text, ln.words);
       obj.startTime = ln.startTime;
       obj.endTime = ln.endTime;
+      obj.hasTiming = true;
       obj.words = obj.normalizedWords || ln.words;
       obj.profileId = DEFAULT_LINE_PROFILE_ID;
       obj.profileSettings = getLineProfile(obj.profileId);
@@ -3288,6 +3312,7 @@ ${String(err)}`);
     const wrappedSegments = wrapScriptSegmentsByWords(segments, maxWordsPerLine, { preferSentenceBreaks: true });
     for (const seg of wrappedSegments) {
       const obj = buildLine(font, seg.text);
+      obj.hasTiming = false;
       obj.profileId = seg.profileId || DEFAULT_LINE_PROFILE_ID;
       obj.profileSettings = getLineProfile(obj.profileId);
       obj.pauseMs = Math.max(0, seg.pauseMs || 0);

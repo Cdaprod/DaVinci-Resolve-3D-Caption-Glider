@@ -89,6 +89,13 @@
     return start + (rel * safeSpeed);
   }
 
+  function scaleTimelineMs(valueMs, speed = 1, minMs = 0) {
+    const safeValue = Math.max(0, Number(valueMs) || 0);
+    const safeSpeed = Math.max(0.01, Number(speed) || 1);
+    const scaled = safeValue / safeSpeed;
+    return Math.max(minMs, scaled);
+  }
+
   function isValidFontResource(font) {
     if (!font || typeof font !== 'object') return false;
     const data = font.data;
@@ -522,6 +529,7 @@
     applyFlipScalar,
     applyFlipScalarLog,
     computeAnimationTime,
+    scaleTimelineMs,
     isValidFontResource,
     normalizeFontResource,
     computeCenterBounds,

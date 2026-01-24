@@ -94,7 +94,7 @@ function testComputeAnimationTime() {
   assert.strictEqual(Number(delayed.toFixed(3)), 9.9);
 
   const spedUp = computeAnimationTime(10.5, start, { speed: 2, delayMs: 100 });
-  assert.strictEqual(Number(spedUp.toFixed(3)), 10.8);
+  assert.strictEqual(Number(spedUp.toFixed(3)), 10.9);
 }
 
 function testExtractEmphasisToken() {

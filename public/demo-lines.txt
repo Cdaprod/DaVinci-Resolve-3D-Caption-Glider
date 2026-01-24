@@ -23,7 +23,7 @@ They choose an alternate path, even if it is negative, as long as it is intentio
 #A I used to believe the problem was the crowd I kept.
 That I was influenced, misled, or pulled into something I never intended to be part of.
 [PAUSE=120]
-#B But the truth is I wasn’t dragged into that life.
+#B But the **truth** is I wasn’t dragged into that life.
 [HOLD=220]
 #B I dove into it willingly.
 [BREAK]

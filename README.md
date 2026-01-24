@@ -19,7 +19,7 @@ A beautiful 3D animated caption system for DaVinci Resolve that now ships as a s
 1. Install dependencies: `pip install -r requirements.txt`
 2. Run with hot reload: `CAPTIONER_PROJECTS_ROOT=/data/projects uvicorn app.main:app --reload --host 0.0.0.0 --port 8791`
 3. Or start Docker (bind your Projects workspace to `/data/projects`): `docker compose up --build captioner`
-4. Open the UI at `http://localhost:8791/public/caption-glider/`
+4. Open the UI at `http://localhost:8791/public/caption-glider/` (append `?render=1` for a render-only canvas without the UI chrome)
 5. Pick a project and video from `/data/projects/<Project>/ingest` and click **Generate Captions** to emit `<Project>/captions/<stem>__<sha10>.{lines.txt,srt,words.json}`
 
 ## 🎮 Usage

@@ -88,7 +88,8 @@
     const start = Number(startTimeSec) || 0;
     const safeSpeed = Math.max(0.01, Number(speed) || 1);
     const delaySec = Math.max(0, Number(delayMs) || 0) / 1000;
-    const rel = (Number(currentTimeSec) || 0) - start - delaySec;
+    const scaledDelaySec = delaySec / safeSpeed;
+    const rel = (Number(currentTimeSec) || 0) - start - scaledDelaySec;
     return start + (rel * safeSpeed);
   }
 

@@ -1,205 +1,152 @@
-#default So what you’re looking at right now,
-is actually the overhead camera.
-[PAUSE=180]
+I was always told I had potential.  
+That awareness never left me, but at some point it stopped being hope and became fuel for fallacies.  
+Fallacies about how I had missed my chance, wasted too much time, and left behind any real version of who I could have been or thought I should have been.
 
-This little camera right here — this is an OBSBOT Tiny 2.
-It’s mounted above my desk, looking straight down at the workspace.
-[PAUSE=200]
+One of the first places I fed those fallacies was in a burn clinic after an accident.  
+Looking back now, I realize the surrender happened long before I ever ended up there.  
+By the time my skin needed repairing, my ideals were already gone.
 
-#A And yeah, I know — it’s kind of funny that you’re watching a camera...
-...from another camera.
-[PAUSE=220]
+When someone has no desire or duty to follow a direction in life, they do not drift accidentally.  
+They choose an alternate path, even if it is negative, as long as it is intentional.
 
-#default But for what I’m doing, this thing is honestly... **perfect**
-[PAUSE=180]
+I used to believe the problem was the crowd I kept.  
+That I was influenced, misled, or pulled into something I never intended to be part of.  
+But the truth is I wasn’t dragged into that life.  
+I dove into it willingly.
 
-All I really need here is access to a sensor,
-A reliable sensor,
-Something that can see the workspace, track movement, and just work.
-[BR=1]
+I traded innocence for future stories.  
+Stories I thought would someday justify the damage.
 
-#A I don’t need cinema glass for this angle,
-I don’t need shallow depth of field,
-I need **coverage**.
-[PAUSE=220]
+Now, nearly two decades later, I can tell those stories.  
+I simply choose not to.  
+Because when I look back, I don’t just see my own fall.  
+I see the faces of people who didn’t survive it.
 
-#default And for that, this is actually a really solid piece of hardware.
-[PAUSE=160]
+That’s when I understood I wasn’t only shaped by circumstance.  
+I pulled others down with me.
 
-It gives me a clean overhead view,
-it stays out of the way,
-and it lets me focus on the actual work,
-instead of babysitting the camera.
-[BR=1]
+The first time I remember lying to myself, and it having lasting consequences, was in a hospital bed.  
+My mother and father were there, along with a doctor preparing to clean third-degree burns covered in dirt and leaves.
 
-#B So when you see this angle later on in the video,
-this is what it is — it’s the **procedural view**.
-[PAUSE=200]
+That doctor raised concerns about my tolerance to prescription medication.  
+Concerns that the anesthesia I needed might not work.
 
-It’s here to show you exactly what I’m doing,
-step by step.
-[HOLD=280]
+When that was explained to me, I stood at a decision I didn’t recognize as important.  
+I could be honest, or I could protect myself from disappointment.  
+I chose silence.
 
-[BREAK]
+I didn’t know then that silence could become a skill.
 
-#default Now… when it comes to projects,
-anyone in their right mind could look at my schedule and say.
-[PAUSE=200]
+The anesthesia failed.  
+Two people worked on either side of me, scrubbing burned skin from my chest and abdomen.  
+In my memory, it feels like steel wool.
 
-#B "What the hell is this guy doing?"
-[HOLD=320]
+That moment haunts me, but it is nothing compared to what came next.  
+That pain was temporary.  
+The pain that followed was not.
 
-#default And honestly — that reaction makes sense,
-if you don’t see the system behind it.
-[PAUSE=240]
+Up until then, I told myself I was using recreationally.  
+That belief ended in that hospital bed.
 
-[BREAK]
+Burns hurt, but knowing what I know now, I would have chosen pain over numbness.  
+I can’t tell where the injury ended and withdrawal began.
 
-#default But there **is** a systematic approach to what I’m doing.
-[PAUSE=180]
+Nothing I have experienced since compares to the physical and mental suffering of addiction.  
+It twists pain into something endless.
 
-The long-term goal is simple:
-I want to make a **cinematic documentary**.
-[PAUSE=220]
+So I ran.  
+I ran into a world parents pray their children never encounter.
 
-#A But you don’t just jump straight into that,
-Everything you’re seeing right now —
-every side project, every upgrade —
-it’s all building toward being able to do that properly.
-[PAUSE=260]
+Armed with lies that sounded logical, I took from anyone willing to give.  
+Friends, strangers, and eventually my own family.
 
-[BREAK]
+Danger felt like momentum.  
+Deception felt like belonging.
 
-#default So how does all of this lead into a documentary?
-[PAUSE=200]
+I charged forward recklessly into a world of decay built on the backs of people like me who came before.  
+They welcomed me as I disappeared further.
 
-#B I’ll just say it plainly:
-we’re going to make the documentary,
-using our **own software**.
-[PAUSE=260]
+Every bridge I burned made the grave deeper.  
+That life lasted a decade.
 
-Software we’re building from scratch.
-[HOLD=300]
+Very few of the people beside me survived it.  
+Through all of it, one thing never changed.  
+My family’s love.
 
-[BREAK]
+I carried it like weight, while they carried me without condition.
 
-#default What we’re actually building is a platform as a service —
-one that represents the ideal filmmaker,
-and editor workflow,
-end-to-end.
-[PAUSE=240]
+In 2013, someone said the word triplets.  
+Three lives, three futures.
 
-Capture
-Monitoring
-Storage
-Organization
-Editing
-Automation
-All in one system
-[BR=2]
+My first thought was not joy or fear.  
+It was calculation.  
+How will this affect my ability to keep using.
 
-[BREAK]
+By then I knew the system.  
+Rehab, jail, and back again.
 
-#default And to bring this full circle to what we’re doing today,
-we’re upgrading the hardware,
-that powers our backend camera agents.
-[PAUSE=240]
+My body showed the cost.  
+Hollow cheeks, scarred arms, and a stare that scared people.
 
-#A Right now, we’re using Raspberry Pis,
-with USB capture card dongles,
-And they work.
-[PAUSE=180]
+The boys came early.  
+Kayson, Kayne, and Kole.
 
-#B But working isn’t the same as **designed**.
-[HOLD=320]
+Our families stepped in and did the real parenting.  
+They let us pretend.
 
-[BREAK]
+But addiction cannot raise children.
 
-#default These two boxes right here are upgrades.
-[PAUSE=160]
+Authorities were notified, families were trusted, and we were told to leave.  
+When I walked away from my childhood home, my newborn sons, and my parents, I felt almost nothing.
 
-One is an M2 expansion board,
-The other is a dedicated capture card HAT.
-[PAUSE=200]
+Drugs dull the right emotions and sharpen the wrong ones.
 
-[BREAK]
+Months passed with the same routines, the same hunger, and the same sickness.  
+Then one night, I finally stopped long enough to hear a voice I had buried.
 
-#default We’re moving our existing single-slot M2 board,
-from the top of the Raspberry Pi,
-to the bottom — out of the way —
-and that immediately gives us an additional M2 slot.
-[PAUSE=260]
+My conscience spoke for the first time in ten years.
 
-#A More importantly,
-it lets us move away from a cheap HDMI-to-USB capture dongle,
-and into a CSI ribbon-based camera capture system.
-[PAUSE=260]
+It didn’t shout or plead.  
+It told me the truth.
 
-That gives us HDMI-in,
-HDMI-out,
-and full HDMI passthrough --
-all handled at the board level.
-[BR=2]
+You had good parents and a father who loved you.  
+You are failing three children who don’t even know it yet.
 
-[BREAK]
+Out here, in prison, or dead, those are the options.  
+Choose now or never.
 
-#default Now here’s the important part:
-the NVMe storage isn’t being used to store media.
-[PAUSE=220]
+No one is coming to save you.  
+You save yourself.
 
-#B It’s being used as a **cache buffer**.
-[HOLD=300]
+Do one thing right for someone other than you.
 
-[BREAK]
+I picked up my phone and called Cato.  
+I trusted him not to steal my car.
 
-#default This Raspberry Pi runs a capture daemon —
-a supervised backend service —
-that uses NVMe as high-speed buffering,
-so we can rescue dropped frames,
-before and after sending video over the network,
-to our central API gateway,
-and media services.
-[PAUSE=320]
+I said drive me to Atlanta, I’m checking into rehab.
 
-[BREAK]
+This time was different.  
+Not easier, but clearer.  
+Purpose changes pain.
 
-#A Because let’s be honest:
-the whole point of this system,
-is to eliminate memory cards entirely.
-[PAUSE=260]
+Ten years later, I still carry a hundred-dollar bill saved for him.  
+It isn’t about the ride.  
+It’s about the ones who never made it out.
 
-No more copying files,
-No more manual archiving,
-No more juggling cards,
-between cameras and computers.
-[BR=2]
+About the fixes we prayed would save us and never did.
 
-[BREAK]
+Giving him that money wasn’t repayment.  
+It was closure and hope handed forward.
 
-#default Everything lives inside our platform’s browser UI.
-[PAUSE=200]
+Maybe it made him believe there was another way.
 
-Camera monitoring
-Camera controls
-Digital asset management
-Built-in timelines
-Effects
-SRT captions
-And AI-assisted tooling layered on top
-[BR=2]
+Cato disappeared for a while, just like I once did.  
+Then one day, he saw me.
 
-[BREAK]
+I gave him the bill and told him why.
 
-#default People hear all of that and say,
-[PAUSE=120]
+Not long after, I heard the news.  
+He got clean.
 
-#B "That sounds like a lot"
-[HOLD=300]
-
-#default But when everything lives in one place,
-it just comes down to **implementation**.
-[PAUSE=240]
-
-#C This is the same idea —
-just built for how I actually **work**.
-[HOLD=420]
+I smiled to myself.  
+Yeah, I meant to do that.

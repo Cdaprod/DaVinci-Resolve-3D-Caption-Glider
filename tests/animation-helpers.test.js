@@ -29,6 +29,8 @@ const {
   parseSrtCues,
   buildCueWordTimings,
   computeAnimationTime,
+  scaleTimelineMs,
+  resolveAnimationSpeed,
   applyFlipScalar,
   applyFlipScalarLog,
   patchNoiseShaderSources,
@@ -94,6 +96,18 @@ function testComputeAnimationTime() {
 
   const spedUp = computeAnimationTime(10.5, start, { speed: 2, delayMs: 100 });
   assert.strictEqual(Number(spedUp.toFixed(3)), 10.8);
+}
+
+function testScaleTimelineMs() {
+  assert.strictEqual(scaleTimelineMs(400, 2), 200);
+  assert.strictEqual(scaleTimelineMs(400, 0.5), 800);
+  assert.strictEqual(scaleTimelineMs(0, 3, 50), 50);
+}
+
+function testResolveAnimationSpeed() {
+  assert.strictEqual(resolveAnimationSpeed(false, 2), 1);
+  assert.strictEqual(resolveAnimationSpeed(true, 2), 2);
+  assert.strictEqual(resolveAnimationSpeed(true, 0), 1);
 }
 
 function testApplyFlipScalar() {
@@ -494,8 +508,10 @@ function run() {
   testIsValidFontResource();
   testNormalizeFontResource();
   testComputeCenterBounds();
-  testComputeAnimationTime();
-  testApplyFlipScalar();
+testComputeAnimationTime();
+testScaleTimelineMs();
+testResolveAnimationSpeed();
+testApplyFlipScalar();
   testApplyFlipScalarLog();
   testEndBias();
   testExtractEmphasisToken();

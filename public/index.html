@@ -2,20 +2,37 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover,user-scalable=no" />
   <title>3D Glide-Over-Line Captioner (Resolve Transcript Sync)</title>
   <style>
     :root {
       --ui-width: clamp(280px, 30vw, 340px);
+      --safe-r: env(safe-area-inset-right, 0px);
+      --safe-l: env(safe-area-inset-left, 0px);
+      --safe-t: env(safe-area-inset-top, 0px);
+      --safe-b: env(safe-area-inset-bottom, 0px);
+      --ui-pad: 12px;
     }
 
-    html, body { margin:0; padding:0; width:100%; height:100%; background:#000; overflow:hidden; overscroll-behavior: none; }
+    *, *::before, *::after { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      max-width: 100%;
+      height: 100%;
+      background: #000;
+      overflow-x: hidden;
+      overflow-y: hidden;
+      overscroll-behavior: none;
+    }
     canvas { width:100%; height:100%; display:block; }
 
     #ui {
       position: fixed;
-      top: max(10px, env(safe-area-inset-top));
-      right: max(10px, env(safe-area-inset-right));
+      top: calc(var(--ui-pad) + var(--safe-t));
+      right: calc(var(--ui-pad) + var(--safe-r));
       z-index: 9999;
       background: rgba(0,0,0,0.78);
       border: 1px solid rgba(255,255,255,0.12);
@@ -24,8 +41,8 @@
       color: #fff;
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       font-size: 12px;
-      width: min(var(--ui-width), calc(100vw - 20px));
-      max-height: calc(100dvh - 20px);
+      width: min(var(--ui-width), calc(100vw - (var(--ui-pad) * 2) - var(--safe-l) - var(--safe-r)));
+      max-height: calc(100dvh - (var(--ui-pad) * 2) - var(--safe-t) - var(--safe-b));
       overflow: hidden;
       display: flex;
       flex-direction: column;
@@ -131,8 +148,9 @@
       flex: 1;
       min-height: 0;
       overflow-y: auto;
+      overflow-x: visible;
       padding-right: 4px;
-      padding-bottom: calc(24px + env(safe-area-inset-bottom));
+      padding-bottom: calc(24px + var(--safe-b));
       -webkit-overflow-scrolling: touch;
       touch-action: pan-y;
     }
@@ -264,7 +282,8 @@
     }
 
     .panel input[type="text"],
-    .panel input[type="number"] {
+    .panel input[type="number"],
+    .panel textarea {
       width: 100%;
       padding: 8px 8px;
       border-radius: 10px;
@@ -272,6 +291,15 @@
       background: rgba(0,0,0,0.30);
       color: #fff;
       outline: none;
+    }
+
+    .panel textarea {
+      min-height: 120px;
+      resize: vertical;
+      font-family: "SFMono-Regular", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 11px;
+      line-height: 1.35;
+      white-space: pre;
     }
 
     .panel .radio-row {
@@ -315,18 +343,22 @@
 
     @media (max-width: 900px) {
       :root { --ui-width: clamp(280px, 44vw, 360px); }
-      #ui { right: 8px; top: 8px; max-height: calc(100vh - 16px); }
+      #ui {
+        right: calc(8px + var(--safe-r));
+        top: calc(8px + var(--safe-t));
+        max-height: calc(100dvh - 16px - var(--safe-t) - var(--safe-b));
+      }
       #ui.collapsed { transform: translateX(calc(min(var(--ui-width), 100vw) - 64px)); }
     }
 
     @media (max-width: 720px), (orientation: portrait) {
       :root { --ui-width: calc(100vw - 24px); }
       #ui {
-        left: 12px;
-        right: 12px;
-        top: 12px;
+        left: calc(12px + var(--safe-l));
+        right: calc(12px + var(--safe-r));
+        top: calc(12px + var(--safe-t));
         width: var(--ui-width);
-        max-height: calc(100vh - 24px);
+        max-height: calc(100dvh - 24px - var(--safe-t) - var(--safe-b));
       }
       #ui.collapsed {
         transform: translateY(calc(100% - 64px));
@@ -334,14 +366,18 @@
     }
 
     @media (orientation: landscape) and (max-height: 520px) {
-      #ui { top: 8px; right: 8px; max-height: calc(100vh - 12px); }
+      #ui {
+        top: calc(8px + var(--safe-t));
+        right: calc(8px + var(--safe-r));
+        max-height: calc(100dvh - 12px - var(--safe-t) - var(--safe-b));
+      }
     }
 
     @media (max-width: 600px) {
       :root { --ui-width: min(92vw, 360px); }
       #ui {
-        left: max(8px, env(safe-area-inset-left));
-        right: max(8px, env(safe-area-inset-right));
+        left: calc(8px + var(--safe-l));
+        right: calc(8px + var(--safe-r));
         width: auto;
       }
     }
@@ -387,6 +423,26 @@
         <button id="btnClearCaptionSource">Clear</button>
       </div>
       <small class="muted">Lines mode uses cfg.linesUrl. SRT/Cues mode resolves from the media URL.</small>
+    </div>
+
+    <div class="panel" id="demoLinesPanel">
+      <h4>Demo Lines</h4>
+      <label>
+        Demo file
+        <select id="demoLinesSelect"></select>
+      </label>
+      <label>
+        New file name
+        <input id="demoLinesNewName" type="text" placeholder="demo-lines-custom.txt" />
+      </label>
+      <div class="row tight">
+        <button id="btnDemoLinesRefresh">Refresh</button>
+        <button id="btnDemoLinesCreate">Create</button>
+        <button id="btnDemoLinesLoad">Load</button>
+        <button id="btnDemoLinesSave">Save</button>
+      </div>
+      <textarea id="demoLinesEditor" placeholder="Edit demo lines here. Each line becomes a caption line."></textarea>
+      <small class="muted">Select a demo file, load it into the editor, then save updates back to the LAN service.</small>
     </div>
 
     <div class="panel" id="timelinePanel">
@@ -525,7 +581,7 @@
     <div id="mini">
       Export note: recording uses <code>canvas.captureStream</code> + <code>MediaRecorder</code>.
       Some iOS browsers may block WebM recording.
-      Demo lines load from <code>/public/demo-lines.txt</code> when running the LAN service.
+      Demo lines load from <code>/api/demo-lines/file</code> (or <code>/public/demo-lines.txt</code> fallback) when running the LAN service.
       Script tokens: <code>#A/#B/#C</code> switch profiles, <code>#default</code> resets to base; <code>[PAUSE=ms]</code> / <code>[HOLD=ms]</code> apply to the next line; <code>[BREAK]</code> adds a blank paragraph gap before the next caption.
       Use the Animation speed slider to scale word reveals + camera follow; Line start delay only applies when keepPreviousLinesVisible is unchecked. Punctuation pacing (comma/sentence/dash pauses), word envelope overlap, and baseline fade controls live in Advanced cfg for smoother intonation in fallback/cue timing.
       Render-only mode: append <code>?render=1</code> to the URL to hide the UI chrome while keeping the canvas output.
@@ -544,8 +600,12 @@
   // -------------------------
   // CONFIG (defaults)
   // -------------------------
+  const DEFAULT_DEMO_LINES_NAME = 'demo-lines.txt';
+  const DEFAULT_DEMO_LINES_URL = `/api/demo-lines/file?name=${encodeURIComponent(DEFAULT_DEMO_LINES_NAME)}`;
+  const DEFAULT_DEMO_LINES_PUBLIC_URL = `/public/${DEFAULT_DEMO_LINES_NAME}`;
+
   const DEFAULT_CFG = Object.freeze({
-    linesUrl: '/public/demo-lines.txt',
+    linesUrl: DEFAULT_DEMO_LINES_URL,
 
     fontId: 'helvetiker',
     fontUrl: 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/fonts/helvetiker_regular.typeface.json',
@@ -619,6 +679,11 @@
     mediaUrl: '',
     applyOffset: true,
     offsetMs: 0,
+  });
+
+  const DEFAULT_DEMO_LINES_STATE = Object.freeze({
+    selectedFile: DEFAULT_DEMO_LINES_NAME,
+    newFileName: 'demo-lines-custom.txt',
   });
 
   const STORAGE_KEY = 'captioner_state_v1';
@@ -974,6 +1039,7 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
   const WORKSPACE_DEFAULT = Object.freeze({ project: '', video: '' });
   let workspaceState = { ...WORKSPACE_DEFAULT };
   let captionSourceState = { ...DEFAULT_CAPTION_SOURCE };
+  let demoLinesState = { ...DEFAULT_DEMO_LINES_STATE };
   let timelineState = {
     durationMs: 0,
     currentMs: 0,
@@ -1001,6 +1067,13 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
   const mediaUrlInput = document.getElementById('mediaUrlInput');
   const btnLoadCaptionSource = document.getElementById('btnLoadCaptionSource');
   const btnClearCaptionSource = document.getElementById('btnClearCaptionSource');
+  const demoLinesSelect = document.getElementById('demoLinesSelect');
+  const demoLinesNewNameInput = document.getElementById('demoLinesNewName');
+  const demoLinesEditor = document.getElementById('demoLinesEditor');
+  const btnDemoLinesRefresh = document.getElementById('btnDemoLinesRefresh');
+  const btnDemoLinesCreate = document.getElementById('btnDemoLinesCreate');
+  const btnDemoLinesLoad = document.getElementById('btnDemoLinesLoad');
+  const btnDemoLinesSave = document.getElementById('btnDemoLinesSave');
   const timelineTimecodeEl = document.getElementById('timelineTimecode');
   const timelineDurationEl = document.getElementById('timelineDuration');
   const timelineRangeEl = document.getElementById('timelineRange');
@@ -1122,6 +1195,33 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
     mediaUrlInput.value = '';
     persistState();
     setStatus('Cleared caption source media URL.');
+  });
+
+  demoLinesSelect?.addEventListener('change', async () => {
+    demoLinesState.selectedFile = demoLinesSelect.value || DEFAULT_DEMO_LINES_NAME;
+    persistState();
+    await loadDemoLinesIntoEditor(demoLinesState.selectedFile, { silent: true });
+  });
+
+  demoLinesNewNameInput?.addEventListener('input', () => {
+    demoLinesState.newFileName = demoLinesNewNameInput.value || '';
+    persistState();
+  });
+
+  btnDemoLinesRefresh?.addEventListener('click', async () => {
+    await refreshDemoLines({ keepSelection: true });
+  });
+
+  btnDemoLinesLoad?.addEventListener('click', async () => {
+    await applyDemoLinesSelection();
+  });
+
+  btnDemoLinesCreate?.addEventListener('click', async () => {
+    await createDemoLinesFile();
+  });
+
+  btnDemoLinesSave?.addEventListener('click', async () => {
+    await saveDemoLinesFile();
   });
 
   timelineRangeEl?.addEventListener('input', () => {
@@ -1382,6 +1482,10 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
           applyOffset: !!captionSourceState.applyOffset,
           offsetMs: Number(captionSourceState.offsetMs) || 0,
         },
+        demoLines: {
+          selectedFile: demoLinesState.selectedFile || DEFAULT_DEMO_LINES_NAME,
+          newFileName: demoLinesState.newFileName || '',
+        },
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     } catch (_) {}
@@ -1410,6 +1514,15 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
         applyOffset: payload.captionSource.applyOffset !== undefined ? !!payload.captionSource.applyOffset : captionSourceState.applyOffset,
         offsetMs: Number(payload.captionSource.offsetMs) || 0,
       };
+    }
+
+    if (payload.demoLines && typeof payload.demoLines === 'object') {
+      if (typeof payload.demoLines.selectedFile === 'string') {
+        demoLinesState.selectedFile = payload.demoLines.selectedFile;
+      }
+      if (typeof payload.demoLines.newFileName === 'string') {
+        demoLinesState.newFileName = payload.demoLines.newFileName;
+      }
     }
 
     if (typeof payload.wpl === 'number' && isFinite(payload.wpl)) {
@@ -1444,6 +1557,7 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
       mediaUrlInput.value = captionSourceState.mediaUrl || '';
       applyOffsetEl.checked = !!captionSourceState.applyOffset;
       offsetMsInput.value = String(captionSourceState.offsetMs || 0);
+      if (demoLinesNewNameInput) demoLinesNewNameInput.value = demoLinesState.newFileName || '';
       updateTimelineDisplay();
     }
 
@@ -2436,31 +2550,194 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
     });
   }
 
-  async function loadLines(url) {
-    const fallbackUrl = DEFAULT_CFG.linesUrl;
-    try {
-      const res = await fetch(url, { cache: 'no-store' });
-      if(!res.ok) throw new Error(`Failed to load lines: ${res.status} ${res.statusText}`);
-      const txt = await res.text();
-      const parsed = txt.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-      if (parsed.length === 0) throw new Error('lines file was empty');
-      return parsed;
-    } catch (err) {
-      if (url !== fallbackUrl) {
-        try {
-          const res = await fetch(fallbackUrl, { cache: 'no-store' });
-          if (!res.ok) throw new Error(`Failed to load lines: ${res.status} ${res.statusText}`);
-          const txt = await res.text();
-          const parsed = txt.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-          if (parsed.length === 0) throw new Error('lines file was empty');
-          return parsed;
-        } catch (fallbackErr) {
-          console.warn('loadLines fallback to built-in demo:', fallbackErr);
-          return [...FALLBACK_DEMO_LINES];
-        }
+  function getDemoLinesFallbackUrls(url) {
+    const fallbacks = [];
+    if (url === DEFAULT_DEMO_LINES_URL) fallbacks.push(DEFAULT_DEMO_LINES_PUBLIC_URL);
+    if (url === DEFAULT_DEMO_LINES_PUBLIC_URL) fallbacks.push(DEFAULT_DEMO_LINES_URL);
+    return fallbacks;
+  }
+
+  async function loadLines(url, fallbackUrls = []) {
+    const attempts = [url, ...fallbackUrls, ...getDemoLinesFallbackUrls(url)];
+    if (url !== DEFAULT_CFG.linesUrl) attempts.push(DEFAULT_CFG.linesUrl);
+    const seen = new Set();
+    for (const candidate of attempts) {
+      if (!candidate || seen.has(candidate)) continue;
+      seen.add(candidate);
+      try {
+        const res = await fetch(candidate, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`Failed to load lines: ${res.status} ${res.statusText}`);
+        const txt = await res.text();
+        const parsed = txt.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+        if (parsed.length === 0) throw new Error('lines file was empty');
+        return parsed;
+      } catch (err) {
+        console.warn(`loadLines failed (${candidate})`, err);
       }
-      console.warn('loadLines fallback to built-in demo:', err);
-      return [...FALLBACK_DEMO_LINES];
+    }
+    console.warn('loadLines fallback to built-in demo');
+    return [...FALLBACK_DEMO_LINES];
+  }
+
+  function parseLinesFromText(text) {
+    return String(text || '')
+      .split(/\r?\n/)
+      .map(line => line.trim())
+      .filter(Boolean);
+  }
+
+  function normalizeDemoLinesName(input) {
+    const raw = String(input || '').trim();
+    if (!raw) return '';
+    let name = raw.replace(/\s+/g, '-');
+    if (!name.startsWith('demo-lines')) name = `demo-lines-${name}`;
+    if (!name.endsWith('.txt')) name += '.txt';
+    name = name.replace(/[^\w\-.]/g, '');
+    return /^demo-lines[\w-]*\.txt$/.test(name) ? name : '';
+  }
+
+  function buildDemoLinesApiUrl(name) {
+    return `/api/demo-lines/file?name=${encodeURIComponent(name)}`;
+  }
+
+  function buildDemoLinesPublicUrl(name) {
+    return `/public/${encodeURIComponent(name)}`;
+  }
+
+  async function fetchDemoLinesList() {
+    try {
+      const res = await fetch('/api/demo-lines', { cache: 'no-store' });
+      if (!res.ok) throw new Error(`list failed: ${res.status}`);
+      const payload = await res.json();
+      const files = Array.isArray(payload.files) ? payload.files : [];
+      return files.filter(Boolean);
+    } catch (err) {
+      console.warn('demo lines list failed', err);
+      return [DEFAULT_DEMO_LINES_NAME];
+    }
+  }
+
+  function applyDemoLinesOptions(files, { keepSelection = true } = {}) {
+    if (!demoLinesSelect) return;
+    demoLinesSelect.innerHTML = '';
+    const uniqueFiles = Array.from(new Set(files));
+    if (!uniqueFiles.length) uniqueFiles.push(DEFAULT_DEMO_LINES_NAME);
+    for (const file of uniqueFiles) {
+      const opt = document.createElement('option');
+      opt.value = file;
+      opt.textContent = file;
+      demoLinesSelect.appendChild(opt);
+    }
+    if (keepSelection && uniqueFiles.includes(demoLinesState.selectedFile)) {
+      demoLinesSelect.value = demoLinesState.selectedFile;
+    } else {
+      demoLinesState.selectedFile = demoLinesSelect.value || uniqueFiles[0];
+      demoLinesSelect.value = demoLinesState.selectedFile;
+      persistState();
+    }
+  }
+
+  async function refreshDemoLines({ keepSelection = true } = {}) {
+    const files = await fetchDemoLinesList();
+    applyDemoLinesOptions(files, { keepSelection });
+    return files;
+  }
+
+  async function loadDemoLinesText(name) {
+    const candidates = [buildDemoLinesApiUrl(name), buildDemoLinesPublicUrl(name)];
+    for (const candidate of candidates) {
+      try {
+        const res = await fetch(candidate, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`load failed: ${res.status}`);
+        return await res.text();
+      } catch (err) {
+        console.warn(`demo lines fetch failed (${candidate})`, err);
+      }
+    }
+    throw new Error('Unable to load demo lines');
+  }
+
+  async function loadDemoLinesIntoEditor(name, { silent = false } = {}) {
+    if (!demoLinesEditor) return '';
+    const fileName = normalizeDemoLinesName(name) || DEFAULT_DEMO_LINES_NAME;
+    try {
+      const text = await loadDemoLinesText(fileName);
+      demoLinesEditor.value = text;
+      if (!silent) setStatus(`Loaded demo lines: ${fileName}`);
+      return text;
+    } catch (err) {
+      if (!silent) setStatus(`Demo lines load failed:\n${String(err)}`);
+      return '';
+    }
+  }
+
+  async function applyDemoLinesSelection() {
+    const fileName = normalizeDemoLinesName(demoLinesSelect?.value || demoLinesState.selectedFile);
+    if (!fileName) {
+      setStatus('Pick a demo lines file to load.');
+      return;
+    }
+    const editorText = demoLinesEditor?.value || await loadDemoLinesIntoEditor(fileName);
+    const lines = parseLinesFromText(editorText);
+    if (!lines.length) {
+      setStatus('No lines to play.');
+      return;
+    }
+    cfg.linesUrl = buildDemoLinesApiUrl(fileName);
+    demoLinesState.selectedFile = fileName;
+    persistState();
+    setCaptionSourceMode('lines');
+    if (!fontRef) fontRef = await loadFontFromSelection();
+    buildFromPlainLines(fontRef, lines);
+    setStatus(`Loaded demo lines: ${fileName}\nLines: ${lines.length}`);
+    replay();
+  }
+
+  async function createDemoLinesFile() {
+    const fileName = normalizeDemoLinesName(demoLinesNewNameInput?.value || demoLinesState.newFileName);
+    if (!fileName) {
+      setStatus('Enter a demo-lines*.txt filename to create.');
+      return;
+    }
+    const content = demoLinesEditor?.value || FALLBACK_DEMO_LINES.join('\n');
+    try {
+      const res = await fetch('/api/demo-lines/file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: fileName, content }),
+      });
+      if (!res.ok) throw new Error(`Create failed: ${res.status}`);
+      await refreshDemoLines({ keepSelection: false });
+      demoLinesState.selectedFile = fileName;
+      if (demoLinesSelect) demoLinesSelect.value = fileName;
+      if (demoLinesNewNameInput) demoLinesNewNameInput.value = fileName;
+      persistState();
+      await loadDemoLinesIntoEditor(fileName, { silent: true });
+      setStatus(`Created demo lines: ${fileName}`);
+    } catch (err) {
+      setStatus(`Create demo lines failed:\n${String(err)}`);
+    }
+  }
+
+  async function saveDemoLinesFile() {
+    const fileName = normalizeDemoLinesName(demoLinesSelect?.value || demoLinesState.selectedFile);
+    if (!fileName) {
+      setStatus('Select a demo lines file to save.');
+      return;
+    }
+    const content = demoLinesEditor?.value || '';
+    try {
+      const res = await fetch('/api/demo-lines/file', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: fileName, content }),
+      });
+      if (!res.ok) throw new Error(`Save failed: ${res.status}`);
+      demoLinesState.selectedFile = fileName;
+      persistState();
+      setStatus(`Saved demo lines: ${fileName}`);
+    } catch (err) {
+      setStatus(`Save demo lines failed:\n${String(err)}`);
     }
   }
 
@@ -3979,6 +4256,14 @@ ${String(err)}`);
       await hydrateState();
       syncWorkspaceInputs();
       await refreshProjects({ keepSelection: true });
+      await refreshDemoLines({ keepSelection: true });
+      if (demoLinesNewNameInput && !demoLinesNewNameInput.value) {
+        demoLinesNewNameInput.value = demoLinesState.newFileName || '';
+      }
+      const demoText = await loadDemoLinesIntoEditor(demoLinesState.selectedFile, { silent: true });
+      if (!demoText && demoLinesEditor) {
+        demoLinesEditor.value = FALLBACK_DEMO_LINES.join('\n');
+      }
 
       applyTextAlignSelection(cfg.textAlign, { silent: true });
       applyTheme(cfg.theme);

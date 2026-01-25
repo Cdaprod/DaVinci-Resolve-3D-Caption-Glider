@@ -9,8 +9,12 @@ from fastapi.testclient import TestClient
 import app.main as main
 
 
-def build_client(tmp_path, monkeypatch):
+def build_client(tmp_path, monkeypatch, public_dir=None):
     monkeypatch.setenv("CAPTIONER_PROJECTS_ROOT", str(tmp_path))
+    if public_dir is not None:
+        monkeypatch.setenv("CAPTIONER_PUBLIC_DIR", str(public_dir))
+    else:
+        monkeypatch.delenv("CAPTIONER_PUBLIC_DIR", raising=False)
     monkeypatch.delenv("MEDIA_SYNC_BASE_URL", raising=False)
     importlib.reload(main)
     return TestClient(main.app), main
@@ -133,6 +137,33 @@ def test_root_static_aliases(tmp_path, monkeypatch):
     rig = client.get("/lighting-rig.js")
     assert rig.status_code == 200
     assert "CaptionLighting" in rig.text
+
+
+def test_demo_lines_endpoints(tmp_path, monkeypatch):
+    public_dir = tmp_path / "public"
+    public_dir.mkdir()
+    (public_dir / "demo-lines.txt").write_text("Hello demo\n", encoding="utf-8")
+    (public_dir / "demo-lines-sample.txt").write_text("Sample line\n", encoding="utf-8")
+
+    client, mod = build_client(tmp_path, monkeypatch, public_dir=public_dir)
+    resp = client.get("/api/demo-lines")
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert "demo-lines.txt" in payload["files"]
+    assert "demo-lines-sample.txt" in payload["files"]
+
+    fetch = client.get("/api/demo-lines/file", params={"name": "demo-lines.txt"})
+    assert fetch.status_code == 200
+    assert "Hello demo" in fetch.text
+
+    save = client.post(
+        "/api/demo-lines/file",
+        json={"name": "demo-lines-custom.txt", "content": "Line 1\nLine 2\n"},
+    )
+    assert save.status_code == 200
+    saved_path = public_dir / "demo-lines-custom.txt"
+    assert saved_path.exists()
+    assert saved_path.read_text(encoding="utf-8").startswith("Line 1")
 
 
 def test_derive_srt_url_captions_dir(tmp_path, monkeypatch):

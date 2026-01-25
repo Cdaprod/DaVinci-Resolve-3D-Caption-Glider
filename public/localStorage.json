@@ -48,6 +48,10 @@
       "mediaUrl": "",
       "applyOffset": true,
       "offsetMs": 0
+    },
+    "demoLines": {
+      "selectedFile": "demo-lines.txt",
+      "newFileName": "demo-lines-custom.txt"
     }
   }
 }

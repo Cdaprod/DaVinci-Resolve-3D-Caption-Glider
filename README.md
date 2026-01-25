@@ -41,6 +41,7 @@ Optional: set `MEDIA_SYNC_BASE_URL` to post the generated `.srt` to media-syncâ€
 
 UI additions:
 - Caption Source panel lets you switch between legacy Lines mode and SRT/Cues mode driven by `/api/captions/*`.
+- Demo Lines panel lets you select, create, edit, and save `demo-lines*.txt` scripts via `/api/demo-lines/file`.
 - Timeline controls add a playhead, scrub slider, and active caption preview for timed captions.
 - Sync controls apply a millisecond offset when cues need nudging.
 
@@ -55,7 +56,7 @@ Edit the `cfg` object in `public/index.html` (or use the built-in configuration 
 
 Animation controls include the global `animationSpeed` multiplier (scales word reveals + camera tracking), `lineStartDelayMs` (adds a short pre-roll when `keepPreviousLinesVisible` is off so the camera can settle before words begin), punctuation pacing (`commaPauseMs`, `sentencePauseMs`, `dashPauseMs`) to add natural pauses between commas and sentence endings in fallback/cue timing, envelope controls (`wordOverlap`, `wordMinMs`, `wordMaxMs`) to smooth continuous word interpolation, and baseline fade tuning (`fadeStart`, `fadeEnd`, `opacityGamma`) to remove reveal snapping.
 
-Default demo lines load from `/public/demo-lines.txt` when the FastAPI service is running (so the UI works correctly in Docker deployments).
+Default demo lines load from `/api/demo-lines/file?name=demo-lines.txt` with a `/public/demo-lines.txt` fallback when the FastAPI service is running (so the UI works correctly in Docker deployments).
 
 Caption derivation settings:
 - `SRT_MAP_MODE` â€” mapping rule for `media_url` (`captions_dir` default, or `side_by_side`)

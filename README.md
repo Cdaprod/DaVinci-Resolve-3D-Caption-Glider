@@ -41,6 +41,7 @@ Optional: set `MEDIA_SYNC_BASE_URL` to post the generated `.srt` to media-syncâ€
 
 UI additions:
 - Caption Source panel lets you switch between legacy Lines mode and SRT/Cues mode driven by `/api/captions/*`.
+- Demo Lines panel lets you select, edit, and save demo-lines*.txt files served by the API.
 - Timeline controls add a playhead, scrub slider, and active caption preview for timed captions.
 - Sync controls apply a millisecond offset when cues need nudging.
 
@@ -55,7 +56,7 @@ Edit the `cfg` object in `public/index.html` (or use the built-in configuration 
 
 Animation controls include the global `animationSpeed` multiplier (scales word reveals + camera tracking) and `lineStartDelayMs` (adds a short pre-roll when `keepPreviousLinesVisible` is off so the camera can settle before words begin).
 
-Default demo lines load from `/public/demo-lines.txt` when the FastAPI service is running (so the UI works correctly in Docker deployments).
+Default demo lines load from `/api/demo-lines/demo-lines.txt`, and the Demo Lines panel can save edits back to the server when running the FastAPI service.
 
 Caption derivation settings:
 - `SRT_MAP_MODE` â€” mapping rule for `media_url` (`captions_dir` default, or `side_by_side`)

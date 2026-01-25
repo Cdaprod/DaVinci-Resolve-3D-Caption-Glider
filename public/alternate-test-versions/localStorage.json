@@ -39,6 +39,10 @@
       "mediaUrl": "",
       "applyOffset": true,
       "offsetMs": 0
+    },
+    "demoLines": {
+      "activeFile": "demo-lines.txt",
+      "editorText": ""
     }
   }
 }

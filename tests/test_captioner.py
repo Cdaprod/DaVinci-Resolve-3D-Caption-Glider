@@ -9,11 +9,14 @@ from fastapi.testclient import TestClient
 import app.main as main
 
 
-def build_client(tmp_path, monkeypatch):
+def build_client(tmp_path, monkeypatch, public_dir=None):
     monkeypatch.setenv("CAPTIONER_PROJECTS_ROOT", str(tmp_path))
     monkeypatch.delenv("MEDIA_SYNC_BASE_URL", raising=False)
     importlib.reload(main)
-    return TestClient(main.app), main
+    if public_dir is not None:
+        main.PUBLIC_DIR = Path(public_dir).resolve()
+    app = main.create_app()
+    return TestClient(app), main
 
 
 def test_file_path_traversal_blocked(tmp_path, monkeypatch):
@@ -94,6 +97,28 @@ def test_file_serving_and_allowlist(tmp_path, monkeypatch):
 
     blocked = client.get(f"/api/projects/{project.name}/file", params={"path": "other/demo.txt"})
     assert blocked.status_code == 400
+
+
+def test_demo_lines_endpoints(tmp_path, monkeypatch):
+    public_dir = tmp_path / "public"
+    public_dir.mkdir()
+    (public_dir / "demo-lines.txt").write_text("hello", encoding="utf-8")
+
+    client, mod = build_client(tmp_path, monkeypatch, public_dir=public_dir)
+    listing = client.get("/api/demo-lines")
+    assert listing.status_code == 200
+    assert "demo-lines.txt" in listing.json().get("files", [])
+
+    read = client.get("/api/demo-lines/demo-lines.txt")
+    assert read.status_code == 200
+    assert read.text.strip() == "hello"
+
+    save = client.put("/api/demo-lines/demo-lines-new.txt", json={"content": "Line 1\nLine 2"})
+    assert save.status_code == 200
+    assert (public_dir / "demo-lines-new.txt").read_text(encoding="utf-8") == "Line 1\nLine 2"
+
+    invalid = client.put("/api/demo-lines/notes.txt", json={"content": "x"})
+    assert invalid.status_code == 400
 
 
 def test_generate_captions_blocks_traversal(tmp_path, monkeypatch):

@@ -270,6 +270,18 @@
       outline: none;
     }
 
+    .panel textarea {
+      width: 100%;
+      padding: 8px 8px;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.14);
+      background: rgba(0,0,0,0.30);
+      color: #fff;
+      outline: none;
+      resize: vertical;
+      min-height: 120px;
+    }
+
     .panel .radio-row {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -383,6 +395,29 @@
         <button id="btnClearCaptionSource">Clear</button>
       </div>
       <small class="muted">Lines mode uses cfg.linesUrl. SRT/Cues mode resolves from the media URL.</small>
+    </div>
+
+    <div class="panel" id="demoLinesPanel">
+      <h4>Demo Lines</h4>
+      <label>
+        Demo file
+        <select id="demoLinesSelect"></select>
+      </label>
+      <label>
+        New file name
+        <input id="demoLinesNameInput" type="text" placeholder="demo-lines-custom.txt" />
+      </label>
+      <div class="row tight">
+        <button id="demoLinesRefresh">Refresh</button>
+        <button id="demoLinesCreate">Create</button>
+        <button id="demoLinesLoad">Load</button>
+        <button id="demoLinesSave" class="primary">Save</button>
+      </div>
+      <label>
+        Lines editor
+        <textarea id="demoLinesEditor" rows="8" spellcheck="false"></textarea>
+      </label>
+      <small class="muted">Select, edit, and save demo-lines*.txt for Lines mode.</small>
     </div>
 
     <div class="panel" id="timelinePanel">
@@ -521,7 +556,7 @@
     <div id="mini">
       Export note: recording uses <code>canvas.captureStream</code> + <code>MediaRecorder</code>.
       Some iOS browsers may block WebM recording.
-      Demo lines load from <code>/public/demo-lines.txt</code> when running the LAN service.
+      Demo lines load from <code>/api/demo-lines/demo-lines.txt</code>; use the Demo Lines panel to switch/edit files.
       Script tokens: <code>#A/#B/#C</code> switch profiles, <code>#default</code> resets to base; <code>[PAUSE=ms]</code> / <code>[HOLD=ms]</code> apply to the next line; <code>[BREAK]</code> adds a blank paragraph gap before the next caption.
       Use the Animation speed slider to scale word reveals + camera follow; Line start delay only applies when keepPreviousLinesVisible is unchecked.
     </div>
@@ -539,8 +574,10 @@
   // -------------------------
   // CONFIG (defaults)
   // -------------------------
+  const DEMO_LINES_DEFAULT_FILE = 'demo-lines.txt';
+  const DEMO_LINES_API_BASE = '/api/demo-lines';
   const DEFAULT_CFG = Object.freeze({
-    linesUrl: '/public/demo-lines.txt',
+    linesUrl: '/api/demo-lines/demo-lines.txt',
 
     fontId: 'helvetiker',
     fontUrl: 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/fonts/helvetiker_regular.typeface.json',
@@ -605,6 +642,11 @@
     mediaUrl: '',
     applyOffset: true,
     offsetMs: 0,
+  });
+
+  const DEFAULT_DEMO_LINES_STATE = Object.freeze({
+    activeFile: DEMO_LINES_DEFAULT_FILE,
+    editorText: '',
   });
 
   const STORAGE_KEY = 'captioner_state_v1';
@@ -949,6 +991,7 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
   const WORKSPACE_DEFAULT = Object.freeze({ project: '', video: '' });
   let workspaceState = { ...WORKSPACE_DEFAULT };
   let captionSourceState = { ...DEFAULT_CAPTION_SOURCE };
+  let demoLinesState = { ...DEFAULT_DEMO_LINES_STATE };
   let timelineState = {
     durationMs: 0,
     currentMs: 0,
@@ -976,6 +1019,13 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
   const mediaUrlInput = document.getElementById('mediaUrlInput');
   const btnLoadCaptionSource = document.getElementById('btnLoadCaptionSource');
   const btnClearCaptionSource = document.getElementById('btnClearCaptionSource');
+  const demoLinesSelect = document.getElementById('demoLinesSelect');
+  const demoLinesNameInput = document.getElementById('demoLinesNameInput');
+  const btnDemoLinesRefresh = document.getElementById('demoLinesRefresh');
+  const btnDemoLinesCreate = document.getElementById('demoLinesCreate');
+  const btnDemoLinesLoad = document.getElementById('demoLinesLoad');
+  const btnDemoLinesSave = document.getElementById('demoLinesSave');
+  const demoLinesEditor = document.getElementById('demoLinesEditor');
   const timelineTimecodeEl = document.getElementById('timelineTimecode');
   const timelineDurationEl = document.getElementById('timelineDuration');
   const timelineRangeEl = document.getElementById('timelineRange');
@@ -1097,6 +1147,47 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
     mediaUrlInput.value = '';
     persistState();
     setStatus('Cleared caption source media URL.');
+  });
+
+  demoLinesSelect?.addEventListener('change', async () => {
+    if (!demoLinesSelect.value) return;
+    await loadDemoLinesIntoEditor(demoLinesSelect.value);
+  });
+
+  btnDemoLinesRefresh?.addEventListener('click', async () => {
+    await refreshDemoLinesList({ keepSelection: true });
+  });
+
+  btnDemoLinesLoad?.addEventListener('click', async () => {
+    if (!demoLinesSelect?.value) return;
+    await loadDemoLinesIntoEditor(demoLinesSelect.value);
+  });
+
+  btnDemoLinesCreate?.addEventListener('click', async () => {
+    const normalized = normalizeDemoLinesFilename(demoLinesNameInput?.value || '');
+    if (!normalized) {
+      setStatus('Enter a demo-lines filename (letters/numbers, .txt).');
+      return;
+    }
+    const initialText = demoLinesEditor?.value?.trim()
+      ? demoLinesEditor.value
+      : FALLBACK_DEMO_LINES.join('\n');
+    await saveDemoLinesFile(normalized, initialText);
+    if (demoLinesSelect) demoLinesSelect.value = normalized;
+    await loadDemoLinesIntoEditor(normalized);
+  });
+
+  btnDemoLinesSave?.addEventListener('click', async () => {
+    if (!demoLinesSelect?.value) {
+      setStatus('Pick a demo lines file to save.');
+      return;
+    }
+    await saveDemoLinesFile(demoLinesSelect.value, demoLinesEditor?.value || '');
+  });
+
+  demoLinesEditor?.addEventListener('input', () => {
+    demoLinesState.editorText = demoLinesEditor.value;
+    persistState();
   });
 
   timelineRangeEl?.addEventListener('input', () => {
@@ -1357,6 +1448,10 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
           applyOffset: !!captionSourceState.applyOffset,
           offsetMs: Number(captionSourceState.offsetMs) || 0,
         },
+        demoLines: {
+          activeFile: demoLinesState.activeFile,
+          editorText: demoLinesState.editorText,
+        },
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     } catch (_) {}
@@ -1385,6 +1480,16 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
         applyOffset: payload.captionSource.applyOffset !== undefined ? !!payload.captionSource.applyOffset : captionSourceState.applyOffset,
         offsetMs: Number(payload.captionSource.offsetMs) || 0,
       };
+    }
+
+    if (payload.demoLines && typeof payload.demoLines === 'object') {
+      if (typeof payload.demoLines.activeFile === 'string' && payload.demoLines.activeFile.trim()) {
+        demoLinesState.activeFile = payload.demoLines.activeFile.trim();
+        cfg.linesUrl = demoLinesFileUrl(demoLinesState.activeFile);
+      }
+      if (typeof payload.demoLines.editorText === 'string') {
+        demoLinesState.editorText = payload.demoLines.editorText;
+      }
     }
 
     if (typeof payload.wpl === 'number' && isFinite(payload.wpl)) {
@@ -1419,6 +1524,8 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
       mediaUrlInput.value = captionSourceState.mediaUrl || '';
       applyOffsetEl.checked = !!captionSourceState.applyOffset;
       offsetMsInput.value = String(captionSourceState.offsetMs || 0);
+      if (demoLinesSelect && demoLinesState.activeFile) demoLinesSelect.value = demoLinesState.activeFile;
+      if (demoLinesEditor) demoLinesEditor.value = demoLinesState.editorText || '';
       updateTimelineDisplay();
     }
 
@@ -1500,6 +1607,99 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
       setWorkspaceStatus('Media ready.');
     } catch (err) {
       setWorkspaceStatus('Media listing failed.');
+    }
+  }
+
+  function demoLinesFileUrl(fileName) {
+    return `${DEMO_LINES_API_BASE}/${encodeURIComponent(fileName)}`;
+  }
+
+  function normalizeDemoLinesFilename(rawName) {
+    let name = (rawName || '').trim();
+    if (!name) return '';
+    name = name.replace(/\s+/g, '-');
+    if (!name.startsWith('demo-lines')) {
+      name = `demo-lines-${name}`;
+    }
+    if (!name.endsWith('.txt')) {
+      name = `${name}.txt`;
+    }
+    name = name.replace(/[^A-Za-z0-9._-]/g, '');
+    if (!/^demo-lines[\w.-]*\.txt$/.test(name)) return '';
+    return name;
+  }
+
+  async function refreshDemoLinesList({ keepSelection = true } = {}) {
+    if (!demoLinesSelect) return [];
+    try {
+      const res = await fetch(DEMO_LINES_API_BASE, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`request failed: ${res.status}`);
+      const data = await res.json();
+      const files = Array.isArray(data.files) ? data.files : [];
+      demoLinesSelect.innerHTML = '';
+      for (const name of files) {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        demoLinesSelect.appendChild(opt);
+      }
+      let nextSelection = demoLinesState.activeFile;
+      if (!keepSelection || !files.includes(nextSelection)) {
+        nextSelection = files[0] || DEMO_LINES_DEFAULT_FILE;
+      }
+      demoLinesState.activeFile = nextSelection;
+      cfg.linesUrl = demoLinesFileUrl(nextSelection);
+      if (demoLinesSelect) demoLinesSelect.value = nextSelection;
+      persistState();
+      return files;
+    } catch (err) {
+      setStatus('Demo lines list failed.\n' + String(err));
+      return [];
+    }
+  }
+
+  async function loadDemoLinesIntoEditor(fileName) {
+    if (!fileName) return;
+    const url = demoLinesFileUrl(fileName);
+    try {
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`request failed: ${res.status}`);
+      const text = await res.text();
+      demoLinesState.activeFile = fileName;
+      demoLinesState.editorText = text;
+      cfg.linesUrl = url;
+      if (demoLinesSelect) demoLinesSelect.value = fileName;
+      if (demoLinesEditor) demoLinesEditor.value = text;
+      persistState();
+      setStatus(`Loaded demo lines: ${fileName}`);
+      return text;
+    } catch (err) {
+      setStatus(`Demo lines load failed: ${String(err)}`);
+      return null;
+    }
+  }
+
+  async function saveDemoLinesFile(fileName, content) {
+    if (!fileName) return;
+    const url = demoLinesFileUrl(fileName);
+    try {
+      const res = await fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
+      });
+      if (!res.ok) {
+        const msg = await res.text();
+        throw new Error(msg || `request failed: ${res.status}`);
+      }
+      demoLinesState.activeFile = fileName;
+      demoLinesState.editorText = content;
+      cfg.linesUrl = url;
+      persistState();
+      setStatus(`Saved demo lines: ${fileName}`);
+      await refreshDemoLinesList({ keepSelection: true });
+    } catch (err) {
+      setStatus(`Demo lines save failed: ${String(err)}`);
     }
   }
 
@@ -2247,31 +2447,28 @@ Ensure this device can reach https://cdn.jsdelivr.net or host those files under 
   }
 
   async function loadLines(url) {
-    const fallbackUrl = DEFAULT_CFG.linesUrl;
-    try {
-      const res = await fetch(url, { cache: 'no-store' });
-      if(!res.ok) throw new Error(`Failed to load lines: ${res.status} ${res.statusText}`);
-      const txt = await res.text();
-      const parsed = txt.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-      if (parsed.length === 0) throw new Error('lines file was empty');
-      return parsed;
-    } catch (err) {
-      if (url !== fallbackUrl) {
-        try {
-          const res = await fetch(fallbackUrl, { cache: 'no-store' });
-          if (!res.ok) throw new Error(`Failed to load lines: ${res.status} ${res.statusText}`);
-          const txt = await res.text();
-          const parsed = txt.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-          if (parsed.length === 0) throw new Error('lines file was empty');
-          return parsed;
-        } catch (fallbackErr) {
-          console.warn('loadLines fallback to built-in demo:', fallbackErr);
-          return [...FALLBACK_DEMO_LINES];
-        }
+    const fallbackUrls = [
+      url,
+      DEFAULT_CFG.linesUrl,
+      '/public/demo-lines.txt',
+      './demo-lines.txt',
+    ].filter((candidate, idx, arr) => candidate && arr.indexOf(candidate) === idx);
+
+    for (const candidate of fallbackUrls) {
+      try {
+        const res = await fetch(candidate, { cache: 'no-store' });
+        if (!res.ok) throw new Error(`Failed to load lines: ${res.status} ${res.statusText}`);
+        const txt = await res.text();
+        const parsed = txt.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+        if (parsed.length === 0) throw new Error('lines file was empty');
+        return parsed;
+      } catch (err) {
+        console.warn('loadLines failed for', candidate, err);
       }
-      console.warn('loadLines fallback to built-in demo:', err);
-      return [...FALLBACK_DEMO_LINES];
     }
+
+    console.warn('loadLines fallback to built-in demo');
+    return [...FALLBACK_DEMO_LINES];
   }
 
   async function loadFontFromSelection(forceUrl) {
@@ -3155,9 +3352,10 @@ ${String(err)}`);
       const segmentNote = (lineImportStats?.rawLineCount && lineImportStats.rawLineCount !== lineObjs.length)
         ? ` (segments: ${lineObjs.length})`
         : '';
+      const demoLabel = demoLinesState.activeFile || DEMO_LINES_DEFAULT_FILE;
       setStatus(transcriptionData
         ? `Done. (Resolve) Lines: ${rawLineCount}${segmentNote}  Words: ${transcriptionData.words?.length ?? 0}`
-        : `Done. (demo-lines.txt) Lines: ${rawLineCount}${segmentNote}`
+        : `Done. (${demoLabel}) Lines: ${rawLineCount}${segmentNote}`
       );
       return;
     }
@@ -3701,6 +3899,14 @@ ${String(err)}`);
       await hydrateState();
       syncWorkspaceInputs();
       await refreshProjects({ keepSelection: true });
+      await refreshDemoLinesList({ keepSelection: true });
+      if (demoLinesEditor) {
+        if (demoLinesState.editorText) {
+          demoLinesEditor.value = demoLinesState.editorText;
+        } else {
+          await loadDemoLinesIntoEditor(demoLinesState.activeFile || DEMO_LINES_DEFAULT_FILE);
+        }
+      }
 
       applyTextAlignSelection(cfg.textAlign, { silent: true });
       applyTheme(cfg.theme);
@@ -3726,7 +3932,7 @@ ${String(err)}`);
       }
     }
 
-    // fallback to demo-lines.txt
+    // fallback to demo lines
     const lines = await loadLines(cfg.linesUrl);
     const wpl = Number(wplEl.value);
     buildFromPlainLines(font, lines, wpl);
@@ -3739,7 +3945,8 @@ ${String(err)}`);
     const segmentNote = (lineImportStats?.rawLineCount && lineImportStats.rawLineCount !== lineImportStats.segmentCount)
       ? ` (segments: ${lineImportStats.segmentCount})`
       : '';
-    setStatus(`Loaded fallback demo-lines.txt\nLines: ${rawLineCount}${segmentNote}`);
+    const demoLabel = demoLinesState.activeFile || DEMO_LINES_DEFAULT_FILE;
+    setStatus(`Loaded fallback ${demoLabel}\nLines: ${rawLineCount}${segmentNote}`);
     replay();
   }
 

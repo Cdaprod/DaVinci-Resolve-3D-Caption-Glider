@@ -40,6 +40,7 @@ SRT_FETCH_TIMEOUT = float(os.environ.get("SRT_FETCH_TIMEOUT", "5.0"))
 
 ALLOWED_SERVE_ROOTS = {"captions", "ingest", "exports", "resolve", "teleprompter", "_manifest"}
 SUPPORTED_VIDEO_SUFFIXES = {".mp4", ".mov", ".mkv", ".m4v", ".avi"}
+DEMO_LINES_PATTERN = re.compile(r"^demo-lines[\w.-]*\.txt$")
 
 logger = logging.getLogger("captioner")
 logging.basicConfig(level=logging.INFO)
@@ -59,6 +60,12 @@ class CaptionPaths(BaseModel):
     words_rel_path: str
     lines_rel_path: str
     srt_rel_path: str
+
+
+class DemoLinesPayload(BaseModel):
+    """Payload for demo lines editing."""
+
+    content: str = Field(..., description="Raw demo lines text")
 
 
 class TranscriptionResult(BaseModel):
@@ -112,6 +119,33 @@ def ensure_allowed_relative(rel_path: str) -> Path:
     if candidate.parts[0] not in ALLOWED_SERVE_ROOTS:
         raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="Directory not allowed")
     return candidate
+
+
+def resolve_demo_lines_path(filename: str, public_dir: Optional[Path] = None) -> Path:
+    """Resolve a demo-lines text file in the public directory."""
+
+    if not filename or not DEMO_LINES_PATTERN.fullmatch(filename):
+        raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="Invalid demo lines filename")
+
+    public_root = public_dir or PUBLIC_DIR
+    target = (public_root / filename).resolve()
+    if public_root not in target.parents and target != public_root:
+        raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="Invalid demo lines path")
+    return target
+
+
+def list_demo_lines_files(public_dir: Optional[Path] = None) -> List[str]:
+    """List available demo-lines text files within the public directory."""
+
+    public_root = public_dir or PUBLIC_DIR
+    if not public_root.exists():
+        return []
+    files = [
+        path.name
+        for path in public_root.glob("demo-lines*.txt")
+        if path.is_file() and DEMO_LINES_PATTERN.fullmatch(path.name)
+    ]
+    return sorted(files)
 
 
 def compute_sha256(path: Path) -> str:
@@ -429,6 +463,50 @@ def create_app() -> FastAPI:
         if not target.exists():
             raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Asset not found")
         return target
+
+    @app.get("/api/demo-lines")
+    async def get_demo_lines() -> Dict[str, List[str]]:
+        """List demo-lines text files available in the public folder.
+
+        Example:
+            curl "http://localhost:8791/api/demo-lines"
+        """
+
+        return {"files": list_demo_lines_files()}
+
+    @app.get("/api/demo-lines/{filename}")
+    async def read_demo_lines(filename: str) -> Response:
+        """Serve a demo-lines text file.
+
+        Example:
+            curl "http://localhost:8791/api/demo-lines/demo-lines.txt"
+        """
+
+        target = resolve_demo_lines_path(filename)
+        if not target.exists():
+            raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Demo lines file not found")
+        try:
+            content = target.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        return Response(content=content, media_type="text/plain")
+
+    @app.put("/api/demo-lines/{filename}")
+    async def write_demo_lines(filename: str, payload: DemoLinesPayload = Body(...)) -> Dict[str, str]:
+        """Write a demo-lines text file.
+
+        Example:
+            curl -X PUT "http://localhost:8791/api/demo-lines/demo-lines-custom.txt" \
+              -H "Content-Type: application/json" \
+              -d '{"content":"Line 1\\nLine 2"}'
+        """
+
+        target = resolve_demo_lines_path(filename)
+        try:
+            target.write_text(payload.content, encoding="utf-8")
+        except OSError as exc:
+            raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        return {"file": filename, "status": "saved"}
 
     @app.get("/animation-helpers.js")
     async def animation_helpers() -> FileResponse:

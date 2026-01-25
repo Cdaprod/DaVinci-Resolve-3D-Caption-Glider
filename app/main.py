@@ -28,7 +28,7 @@ from starlette.status import HTTP_400_BAD_REQUEST, HTTP_404_NOT_FOUND
 from faster_whisper import WhisperModel
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-PUBLIC_DIR = BASE_DIR / "public"
+PUBLIC_DIR = Path(os.environ.get("CAPTIONER_PUBLIC_DIR", str(BASE_DIR / "public"))).resolve()
 DEFAULT_PROJECTS_ROOT = Path(os.environ.get("CAPTIONER_PROJECTS_ROOT", "/data/projects")).resolve()
 CAPTIONER_HOST = os.environ.get("CAPTIONER_HOST", "0.0.0.0")
 CAPTIONER_PORT = int(os.environ.get("CAPTIONER_PORT", "8791"))
@@ -40,6 +40,7 @@ SRT_FETCH_TIMEOUT = float(os.environ.get("SRT_FETCH_TIMEOUT", "5.0"))
 
 ALLOWED_SERVE_ROOTS = {"captions", "ingest", "exports", "resolve", "teleprompter", "_manifest"}
 SUPPORTED_VIDEO_SUFFIXES = {".mp4", ".mov", ".mkv", ".m4v", ".avi"}
+DEMO_LINES_PATTERN = re.compile(r"^demo-lines[\w-]*\.txt$")
 
 logger = logging.getLogger("captioner")
 logging.basicConfig(level=logging.INFO)
@@ -64,6 +65,13 @@ class CaptionPaths(BaseModel):
 class TranscriptionResult(BaseModel):
     sha256: str
     words: List[Dict[str, object]]
+
+
+class DemoLinesPayload(BaseModel):
+    """Payload for demo lines read/write endpoints."""
+
+    name: str = Field(..., description="Demo lines filename, e.g. demo-lines.txt")
+    content: str = Field("", description="Full text body of the demo lines file")
 
 
 _model_cache: Dict[str, WhisperModel] = {}
@@ -112,6 +120,29 @@ def ensure_allowed_relative(rel_path: str) -> Path:
     if candidate.parts[0] not in ALLOWED_SERVE_ROOTS:
         raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="Directory not allowed")
     return candidate
+
+
+def resolve_demo_lines_path(name: str) -> Path:
+    """Resolve a demo-lines*.txt file under the public directory."""
+
+    if not name or not str(name).strip():
+        raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="Demo lines name required")
+
+    if not DEMO_LINES_PATTERN.match(str(name).strip()):
+        raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="Invalid demo lines filename")
+
+    candidate = (PUBLIC_DIR / name).resolve()
+    if PUBLIC_DIR not in candidate.parents and candidate != PUBLIC_DIR:
+        raise HTTPException(status_code=HTTP_400_BAD_REQUEST, detail="Invalid demo lines path")
+    return candidate
+
+
+def list_demo_lines_files(public_dir: Path = PUBLIC_DIR) -> List[str]:
+    """Return sorted demo-lines*.txt files from the public directory."""
+
+    if not public_dir.exists():
+        return []
+    return sorted([p.name for p in public_dir.glob("demo-lines*.txt") if p.is_file()])
 
 
 def compute_sha256(path: Path) -> str:
@@ -421,6 +452,45 @@ def create_app() -> FastAPI:
         if not target.exists():
             raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="UI not found")
         return FileResponse(target)
+
+    @app.get("/api/demo-lines")
+    async def list_demo_lines() -> JSONResponse:
+        """List demo-lines*.txt files in the public directory.
+
+        Example:
+            curl "http://localhost:8791/api/demo-lines"
+        """
+
+        files = list_demo_lines_files(PUBLIC_DIR)
+        return JSONResponse({"files": files, "default": "demo-lines.txt"})
+
+    @app.get("/api/demo-lines/file")
+    async def get_demo_lines(name: str = Query(..., description="Demo lines filename")) -> Response:
+        """Return a demo lines text file.
+
+        Example:
+            curl "http://localhost:8791/api/demo-lines/file?name=demo-lines.txt"
+        """
+
+        target = resolve_demo_lines_path(name)
+        if not target.exists() or not target.is_file():
+            raise HTTPException(status_code=HTTP_404_NOT_FOUND, detail="Demo lines file not found")
+        return Response(content=target.read_text(encoding="utf-8"), media_type="text/plain")
+
+    @app.post("/api/demo-lines/file")
+    async def save_demo_lines(payload: DemoLinesPayload) -> JSONResponse:
+        """Create or update a demo lines text file.
+
+        Example:
+            curl -X POST "http://localhost:8791/api/demo-lines/file" \
+              -H "Content-Type: application/json" \
+              -d '{"name":"demo-lines-custom.txt","content":"Line 1\\nLine 2"}'
+        """
+
+        target = resolve_demo_lines_path(payload.name)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(payload.content or "", encoding="utf-8")
+        return JSONResponse({"name": target.name, "bytes": target.stat().st_size})
 
     def resolve_public_asset(filename: str) -> Path:
         target = (PUBLIC_DIR / filename).resolve()
